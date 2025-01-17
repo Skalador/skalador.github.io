@@ -19,7 +19,7 @@ subtitle = "Personal blog mostly focused on technical topics around Linux and Ku
 [sidebar.avatar]
 enabled = true
 local = true
-src = "img/avatar.png"
+src = "img/avatar.jpg"
 
 [article]
 headingAnchor = false
