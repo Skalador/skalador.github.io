@@ -1,5 +1,5 @@
 # Change baseurl before deploy
-baseurl = "https://skalador.github.io"
+baseurl = "https://www.niederwanger.dev"
 languageCode = "en-us"
 title = "Kevin Niederwanger"
 
