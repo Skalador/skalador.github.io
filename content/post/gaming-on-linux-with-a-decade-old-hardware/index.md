@@ -76,4 +76,20 @@ Before I can elaborate on the performance, I need to clarify, that there are no 
 - Frostpunk
 - Elden Ring
 
+### Heroes of the Storm
+- Client: Lutris
+- Native platform(s): Windows
+
+Lutris allows you to install the [Battle.net Desktop Client](https://download.battle.net/de-de/desktop) and then the game via the client as usual. This game works very well on Linux with equal graphic settings, i.e. `High`. When playing around with ALT+TAB and the Super/Windows Key I found out that it is better to run this game with the `Display Mode: Windowed Fullscreen`. One thing which worked even better on Linux than Windows is, that I did not run into the [`Infinite Reconnecting screen`](https://us.forums.blizzard.com/en/heroes/t/infinite-reconnecting-screen/26423) which is some odd bug in the game which was never fixed.
+
+### Frostpunk
+- Client: Heroic Games Launcher
+- Native platform(s): Windows
+
+There was no issue with playing the game. It runs fluent and had no issues when tabbing in and out. The cloud saves made some difficulties, but this seems to be game rather than platform specific.
+
+### Elden Ring
+- Client: Steam
+- Native platform(s): Windows
+
 ... to be continued ...
