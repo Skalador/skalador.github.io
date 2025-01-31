@@ -2,7 +2,7 @@
 title: Building a blog with Hugo
 description: Hugo and the Hugo Theme Stack
 slug: building-a-blog
-date: 2024-01-15 00:00:00+0000
+date: 2025-01-15 00:00:00+0000
 image: cover.jpg
 categories:
     - Blogging
