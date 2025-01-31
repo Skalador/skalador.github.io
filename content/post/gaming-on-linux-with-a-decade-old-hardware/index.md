@@ -2,8 +2,8 @@
 title: Gaming on Linux with a decade old hardware
 description: Fedora Linux for gaming with very old hardware
 slug: gaming-on-linux-with-a-decade-old-hardware
-date: 2024-01-21 00:00:00+0000
-#image: cover.jpg
+date: 2025-01-31 00:00:00+0000
+image: gaming.jpg # https://unsplash.com/photos/black-keyboard-nCU4yq5xDEQ
 categories:
     - linux
 tags:
@@ -22,7 +22,7 @@ My hardware is:
   - replaced it with a GTX 1050Ti
 - 16 GB DDR3 RAM
 
-As you can tell, that is not really a powerul hardware nowadays anymore.
+As you can tell, that is not really a powerful hardware nowadays anymore.
 
 Back then I was using Ubuntu in dual boot with Windows 7. As I was not sure, if Linux would actually work as I hoped it to work, I didn't dare to completely wipe my Windows. Fortunately, I haven't done it as my Linux desktop experience was quite tedious. The biggest pain points I was facing were: 
 - I was not that familiar with Linux itself (at least compared to now) 
@@ -78,18 +78,32 @@ Before I can elaborate on the performance, I need to clarify, that there are no 
 
 ### Heroes of the Storm
 - Client: Lutris
+- Game acquired via: GOG Galaxy
 - Native platform(s): Windows
 
 Lutris allows you to install the [Battle.net Desktop Client](https://download.battle.net/de-de/desktop) and then the game via the client as usual. This game works very well on Linux with equal graphic settings, i.e. `High`. When playing around with ALT+TAB and the Super/Windows Key I found out that it is better to run this game with the `Display Mode: Windowed Fullscreen`. One thing which worked even better on Linux than Windows is, that I did not run into the [`Infinite Reconnecting screen`](https://us.forums.blizzard.com/en/heroes/t/infinite-reconnecting-screen/26423) which is some odd bug in the game which was never fixed.
 
 ### Frostpunk
 - Client: Heroic Games Launcher
+- Game acquired via: GOG Galaxy
 - Native platform(s): Windows
 
 There was no issue with playing the game. It runs fluent and had no issues when tabbing in and out. The cloud saves made some difficulties, but this seems to be game rather than platform specific.
 
 ### Elden Ring
 - Client: Steam
+- Game acquired via: Steam
 - Native platform(s): Windows
 
-... to be continued ...
+This masterpiece is surely the most resource intense game on the list. Nevertheless, Linux was still able to run it without any issue on `High` graphic settings. Via Steam I could also easily connect my PS3 controller without any additional software and had access to all cloud saves. 
+
+## Which games are problematic?
+
+Generally speaking games which use kernel-level anti-cheat technology might not run on linux due to the use of Wine or Proton. A list of games relying on kernel-level anti-cheat can be found [here](https://www.pcgamingwiki.com/wiki/List_of_games_with_anti-cheat_technology). If you look at the list very carefully, you will see that Elden Ring also uses kernel-level anti-cheat. This was no issue for me, as I was not playing online.
+
+While I have a strong opinion that kernel-level anti-cheat gaming software should not be used, because the kernel is not a place for user software. Especially not gaming software. A human friendly one minute explanation can be found on [Youtube from Pirate Software below](https://www.youtube.com/watch?v=V1HwhwXelZo):
+{{< youtube V1HwhwXelZo>}}
+
+## Conclusion
+
+The linux desktop has become way more user friendly than it was before. As you have seen, there might still be some minor issues, but it is not really blocking you from using it as a main operating system. My experience is very positive and I am more than happy that I had spent time on it.
