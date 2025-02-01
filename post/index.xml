@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Posts on Kevin Niederwanger</title><link>https://www.niederwanger.dev/post/</link><description>Recent content in Posts on Kevin Niederwanger</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Fri, 31 Jan 2025 00:00:00 +0000</lastBuildDate><atom:link href="https://www.niederwanger.dev/post/index.xml" rel="self" type="application/rss+xml"/><item><title>Gaming on Linux with a decade old hardware</title><link>https://www.niederwanger.dev/p/gaming-on-linux-with-a-decade-old-hardware/</link><pubDate>Fri, 31 Jan 2025 00:00:00 +0000</pubDate><guid>https://www.niederwanger.dev/p/gaming-on-linux-with-a-decade-old-hardware/</guid><description>&lt;img src="https://www.niederwanger.dev/p/gaming-on-linux-with-a-decade-old-hardware/gaming.jpg" alt="Featured image of post Gaming on Linux with a decade old hardware" />&lt;h2 id="a-retrospective">A retrospective
+&lt;/h2>&lt;p>Ten years ago I have used my exact same workstation hardware to try my first linux desktop experience.
+My hardware is:&lt;/p>
+&lt;ul>
+&lt;li>Intel Xeon CPU E3-1231 v3&lt;/li>
+&lt;li>Nvidia GTX 970
+&lt;ul>
+&lt;li>broke twice, but one time within warranty&lt;/li>
+&lt;li>replaced it with a GTX 1050Ti&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>16 GB DDR3 RAM&lt;/li>
+&lt;/ul>
+&lt;p>As you can tell, that is not really a powerful hardware nowadays anymore.&lt;/p>
+&lt;p>Back then I was using Ubuntu in dual boot with Windows 7. As I was not sure, if Linux would actually work as I hoped it to work, I didn&amp;rsquo;t dare to completely wipe my Windows. Fortunately, I haven&amp;rsquo;t done it as my Linux desktop experience was quite tedious. The biggest pain points I was facing were:&lt;/p>
+&lt;ul>
+&lt;li>I was not that familiar with Linux itself (at least compared to now)&lt;/li>
+&lt;li>Installing the correct hardware drivers was a nightmare&lt;/li>
+&lt;li>Most games didn&amp;rsquo;t offer native Linux support thus you had to rely heavily on &lt;a class="link" href="https://www.winehq.org/" target="_blank" rel="noopener"
+>wine&lt;/a>&lt;/li>
+&lt;li>Almost no native gaming clients&lt;/li>
+&lt;li>I could not get some games working on linux&lt;/li>
+&lt;li>Looking at forums you occasionally found threads about people complaining to be banned, because they were playing on a non supported operating system&lt;/li>
+&lt;/ul>
+&lt;h2 id="why-now">Why now?
+&lt;/h2>&lt;p>As time has passed, I was evaluating if I want to migrate my Windows 10 to Windows 11. After checking the &lt;a class="link" href="https://www.microsoft.com/en-us/windows/windows-11-specifications" target="_blank" rel="noopener"
+>system requirements for Windows 11&lt;/a>, I found out that my PC was lacking on the following parts:&lt;/p>
+&lt;ul>
+&lt;li>Convert Master Boot Record (MBR) to GUID Partition Table (GPT) to enable UEFI boot&lt;/li>
+&lt;li>No Trusted Platform Module (TPM)&lt;/li>
+&lt;li>Unsupported processor&lt;/li>
+&lt;/ul>
+&lt;p>While converting the MBR to GPT was a software issue and can be &lt;a class="link" href="https://www.windowscentral.com/how-convert-mbr-disk-gpt-move-bios-uefi-windows-10" target="_blank" rel="noopener"
+>solved with this guide&lt;/a>, the remaining items are hardware issues. There might be the possibility to work around this, but I didn&amp;rsquo;t like the direction Windows was aiming for anyway. Consequently, I have decided to give Linux another chance.&lt;/p>
+&lt;h2 id="the-linux-experience">The Linux Experience
+&lt;/h2>&lt;h3 id="which-distro">Which Distro?
+&lt;/h3>&lt;p>One of the first questions which come up, when you think about Linux is, which distribution to use? Given that I work for &lt;a class="link" href="https://www.redhat.com/en" target="_blank" rel="noopener"
+>Red Hat&lt;/a>, I have decided to use &lt;a class="link" href="https://fedoraproject.org/" target="_blank" rel="noopener"
+>Fedora Workstation&lt;/a>. This is mostly due to the &lt;a class="link" href="https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux" target="_blank" rel="noopener"
+>Red Hat Enterprise Linux&lt;/a> like behavior.&lt;/p>
+&lt;h3 id="usability">Usability
+&lt;/h3>&lt;p>My impression is, that the usability has largely improved in the desktop space. The graphical user interface (GUI) looks very modern. You have the possibility to use multiple screens (as with MacOS). You can use the Software Center to obtain a ton of software including third parties, like &lt;code>rpmfusion&lt;/code> and &lt;code>flatpaks&lt;/code>. Most of the things can be configured via GUI, if you desire to do so.&lt;/p>
+&lt;h3 id="are-all-problems-solved-now">Are all problems solved now?
+&lt;/h3>&lt;p>Let me elaborate on the problems mentioned earlier.&lt;/p>
+&lt;h4 id="drivers">Drivers
+&lt;/h4>&lt;p>Per default Fedora was shipped with the &lt;a class="link" href="https://nouveau.freedesktop.org/" target="_blank" rel="noopener"
+>NVIDIA nouveau&lt;/a> drivers. Those drivers worked well for me on native Linux games. However, they performed very poorly on games which were relying on Wine. Yet again I had to install the GPU drivers from NVIDIA. To my surprise this was a very easy task. The software center had automatically detected which third party driver my system would need and I could install them very comfortably via the GUI.
+&lt;img src="https://www.niederwanger.dev/p/gaming-on-linux-with-a-decade-old-hardware/hardware_drivers.png"
+width="1322"
+height="922"
+srcset="https://www.niederwanger.dev/p/gaming-on-linux-with-a-decade-old-hardware/hardware_drivers_hu_804455fa77f9e44.png 480w, https://www.niederwanger.dev/p/gaming-on-linux-with-a-decade-old-hardware/hardware_drivers_hu_9f5811a5ad0f27b9.png 1024w"
+loading="lazy"
+class="gallery-image"
+data-flex-grow="143"
+data-flex-basis="344px"
+>&lt;/p>
+&lt;h4 id="gaming-clients">Gaming clients
+&lt;/h4>&lt;p>Unfortunately some gaming clients like the &lt;a class="link" href="https://www.blizzard.com/en-us/" target="_blank" rel="noopener"
+>Blizzard Battle.net&lt;/a> or &lt;a class="link" href="https://www.gog.com/wishlist/galaxy/release_the_gog_galaxy_client_for_linux" target="_blank" rel="noopener"
+>GOG Galaxy&lt;/a> do not offer native Linux support. Consequently you will need to take a look at other solutions.
+Currently there are differnet gaming clients available. The most common ones, besides &lt;a class="link" href="https://steamcommunity.com/" target="_blank" rel="noopener"
+>Steam&lt;/a>, are &lt;a class="link" href="https://heroicgameslauncher.com/" target="_blank" rel="noopener"
+>Heroic Games Launcher&lt;/a> and &lt;a class="link" href="https://lutris.net/" target="_blank" rel="noopener"
+>Lutris&lt;/a>. Both of those clients have their pros and cons. Lutris allows you to connect to the Battle.net
+&lt;img src="https://www.niederwanger.dev/p/gaming-on-linux-with-a-decade-old-hardware/lutris_battle_net.png"
+width="1920"
+height="1048"
+srcset="https://www.niederwanger.dev/p/gaming-on-linux-with-a-decade-old-hardware/lutris_battle_net_hu_dced39dcc6f99297.png 480w, https://www.niederwanger.dev/p/gaming-on-linux-with-a-decade-old-hardware/lutris_battle_net_hu_e7486340295161df.png 1024w"
+loading="lazy"
+class="gallery-image"
+data-flex-grow="183"
+data-flex-basis="439px"
+> but does not offer cloud save files for the GOG Galaxy. While the Heroic Games Launcher does support the cloud saves, you cannot use it for the Blizzard games. Consequently, there is no one size fits all solution.&lt;/p>
+&lt;h4 id="cloud-saves">Cloud saves
+&lt;/h4>&lt;p>An additional problem arises, when we talk about cloud saves. While, I cannot tell if this issue is persisnt across all gaming clients, but I can provide the following example: &lt;a class="link" href="https://www.gog.com/en/game/faster_than_light" target="_blank" rel="noopener"
+>FTL: Advanced Edition&lt;/a> is a strategy game which I had bought via GOG Galaxy (Note: I could have also bought it via Steam). To have my cloud save files, I would be required to use Heroic Games Launcher instead of Lutris. On the Heroic Games Launcher I have two options:&lt;/p>
+&lt;ol>
+&lt;li>Install the Linux native version of the game (preferred)&lt;/li>
+&lt;li>Install the Windows version of the game and use Wine.&lt;/li>
+&lt;/ol>
+&lt;p>After trying option 1, I rather quickly found out that I do not have access to my cloud save files as they are tied to my previous operating system installation. After wiping the linux native installation, I had installed the Windows version. Then I had access to my save files. Funnily enough, the save files are just text files which you can copy around and thus use them even with the Linux version. Nevertheless, to get the access to the cloud save from the previous Windows installation, you will have to download the Windows version. Especially as the GOG Galaxy does not offer a download of the cloud saves &lt;a class="link" href="https://www.gog.com/account/cloud-saves" target="_blank" rel="noopener"
+>neither via the website&lt;/a> nor &lt;a class="link" href="https://docs.gog.com/gc-cloud-saves/" target="_blank" rel="noopener"
+>via an API&lt;/a>.&lt;/p>
+&lt;h2 id="performance">Performance
+&lt;/h2>&lt;p>Before I can elaborate on the performance, I need to clarify, that there are no metrics being compared between the operating systems. I will just refer to the same games on equal graphic settings and see if those feel fluid (like before). The games I will be referring to are:&lt;/p>
+&lt;ul>
+&lt;li>Heroes of the Storm&lt;/li>
+&lt;li>Frostpunk&lt;/li>
+&lt;li>Elden Ring&lt;/li>
+&lt;/ul>
+&lt;h3 id="heroes-of-the-storm">Heroes of the Storm
+&lt;/h3>&lt;ul>
+&lt;li>Client: Lutris&lt;/li>
+&lt;li>Game acquired via: GOG Galaxy&lt;/li>
+&lt;li>Native platform(s): Windows&lt;/li>
+&lt;/ul>
+&lt;p>Lutris allows you to install the &lt;a class="link" href="https://download.battle.net/de-de/desktop" target="_blank" rel="noopener"
+>Battle.net Desktop Client&lt;/a> and then the game via the client as usual. This game works very well on Linux with equal graphic settings, i.e. &lt;code>High&lt;/code>. When playing around with ALT+TAB and the Super/Windows key I found out that it is better to run this game with the &lt;code>Display Mode: Windowed Fullscreen&lt;/code>. One thing which worked even better on Linux than Windows is, that I did not run into the &lt;a class="link" href="https://us.forums.blizzard.com/en/heroes/t/infinite-reconnecting-screen/26423" target="_blank" rel="noopener"
+>Infinite Reconnecting screen&lt;/a> which is some odd bug in the game which was never fixed.&lt;/p>
+&lt;h3 id="frostpunk">Frostpunk
+&lt;/h3>&lt;ul>
+&lt;li>Client: Heroic Games Launcher&lt;/li>
+&lt;li>Game acquired via: GOG Galaxy&lt;/li>
+&lt;li>Native platform(s): Windows&lt;/li>
+&lt;/ul>
+&lt;p>There was no issue with playing the game. It runs fluent and had no issues when tabbing in and out. The cloud saves caused some difficulties, but this seems to be game rather than platform specific.&lt;/p>
+&lt;h3 id="elden-ring">Elden Ring
+&lt;/h3>&lt;ul>
+&lt;li>Client: Steam&lt;/li>
+&lt;li>Game acquired via: Steam&lt;/li>
+&lt;li>Native platform(s): Windows&lt;/li>
+&lt;/ul>
+&lt;p>This masterpiece is surely the most resource intense game on the list. Nevertheless, Linux was still able to run it without any issue on &lt;code>High&lt;/code> graphic settings. Via Steam I could also easily connect my PS3 controller without any additional software and had access to all cloud saves.&lt;/p>
+&lt;h2 id="which-games-are-problematic">Which games are problematic?
+&lt;/h2>&lt;p>Generally speaking games which use kernel-level anti-cheat technology might not run on linux due to the use of Wine or Proton. A list of games relying on kernel-level anti-cheat can be found &lt;a class="link" href="https://www.pcgamingwiki.com/wiki/List_of_games_with_anti-cheat_technology" target="_blank" rel="noopener"
+>here&lt;/a>. If you look at the list very carefully, you will see that Elden Ring also uses kernel-level anti-cheat. This was no issue for me, as I was not playing online.&lt;/p>
+&lt;p>I have a strong opinion that kernel-level anti-cheat gaming software should not be used, because the kernel is not a place for user software. Especially not gaming software. A human friendly one minute explanation can be found on &lt;a class="link" href="https://www.youtube.com/watch?v=V1HwhwXelZo" target="_blank" rel="noopener"
+>Youtube from Pirate Software below&lt;/a>:
+&lt;div class="video-wrapper">
+&lt;iframe loading="lazy"
+src="https://www.youtube.com/embed/V1HwhwXelZo"
+allowfullscreen
+title="YouTube Video"
+>
+&lt;/iframe>
+&lt;/div>
+&lt;/p>
+&lt;h2 id="conclusion">Conclusion
+&lt;/h2>&lt;p>The linux desktop has become way more user friendly than it was before. As you have seen, there might still be some minor issues, but it is not really blocking you from using it as a main operating system. My experience is very positive and I am more than happy that I had spent time on it.&lt;/p></description></item><item><title>Building a blog with Hugo</title><link>https://www.niederwanger.dev/p/building-a-blog/</link><pubDate>Wed, 15 Jan 2025 00:00:00 +0000</pubDate><guid>https://www.niederwanger.dev/p/building-a-blog/</guid><description>&lt;img src="https://www.niederwanger.dev/p/building-a-blog/cover.jpg" alt="Featured image of post Building a blog with Hugo" />&lt;h1 id="building-a-blog-is-easy-with-the-right-tools">Building a blog is easy with the right tools
+&lt;/h1>&lt;p>As I was looking for a static site generator which supports &lt;code>Markdown&lt;/code> as an input, I came across &lt;a class="link" href="https://gohugo.io/" target="_blank" rel="noopener"
+>Hugo&lt;/a>. Hugo is an open source static site generator written in &lt;code>Go&lt;/code>. Hugo supports a lot of built in &lt;a class="link" href="https://themes.gohugo.io/" target="_blank" rel="noopener"
+>Themes&lt;/a>. One easy Theme to get started is the &lt;a class="link" href="https://github.com/CaiJimmy/hugo-theme-stack-starter" target="_blank" rel="noopener"
+>Hugo Theme Stack&lt;/a> from &lt;a class="link" href="https://github.com/CaiJimmy" target="_blank" rel="noopener"
+>CaiJimmy&lt;/a>.&lt;/p></description></item></channel></rss>
