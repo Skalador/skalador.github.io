@@ -1,6 +1,6 @@
 ---
 title: Gaming on Linux with a decade old hardware
-description: Fedora Linux for gaming a decade old hardware
+description: Fedora Linux for gaming on a decade old hardware
 slug: gaming-on-linux-with-a-decade-old-hardware
 date: 2025-01-31 00:00:00+0000
 image: gaming.jpg # https://unsplash.com/photos/black-keyboard-nCU4yq5xDEQ
