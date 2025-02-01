@@ -1,6 +1,6 @@
 ---
 title: Gaming on Linux with a decade old hardware
-description: Fedora Linux for gaming with very old hardware
+description: Fedora Linux for gaming a decade old hardware
 slug: gaming-on-linux-with-a-decade-old-hardware
 date: 2025-01-31 00:00:00+0000
 image: gaming.jpg # https://unsplash.com/photos/black-keyboard-nCU4yq5xDEQ
@@ -33,7 +33,7 @@ Back then I was using Ubuntu in dual boot with Windows 7. As I was not sure, if 
 - Looking at forums you occasionally found threads about people complaining to be banned, because they were playing on a non supported operating system 
 
 ## Why now? 
-As time has passed, I was evaluating if I want to migrate my Windows 10 to Windows 11. After checking the [system requirements for Windows 11](https://www.microsoft.com/en-us/windows/windows-11-specifications), I found out that I my PC lacking on the following parts: 
+As time has passed, I was evaluating if I want to migrate my Windows 10 to Windows 11. After checking the [system requirements for Windows 11](https://www.microsoft.com/en-us/windows/windows-11-specifications), I found out that my PC was lacking on the following parts: 
 - Convert Master Boot Record (MBR) to GUID Partition Table (GPT) to enable UEFI boot
 - No Trusted Platform Module (TPM)
 - Unsupported processor
@@ -81,14 +81,14 @@ Before I can elaborate on the performance, I need to clarify, that there are no 
 - Game acquired via: GOG Galaxy
 - Native platform(s): Windows
 
-Lutris allows you to install the [Battle.net Desktop Client](https://download.battle.net/de-de/desktop) and then the game via the client as usual. This game works very well on Linux with equal graphic settings, i.e. `High`. When playing around with ALT+TAB and the Super/Windows Key I found out that it is better to run this game with the `Display Mode: Windowed Fullscreen`. One thing which worked even better on Linux than Windows is, that I did not run into the [`Infinite Reconnecting screen`](https://us.forums.blizzard.com/en/heroes/t/infinite-reconnecting-screen/26423) which is some odd bug in the game which was never fixed.
+Lutris allows you to install the [Battle.net Desktop Client](https://download.battle.net/de-de/desktop) and then the game via the client as usual. This game works very well on Linux with equal graphic settings, i.e. `High`. When playing around with ALT+TAB and the Super/Windows key I found out that it is better to run this game with the `Display Mode: Windowed Fullscreen`. One thing which worked even better on Linux than Windows is, that I did not run into the [Infinite Reconnecting screen](https://us.forums.blizzard.com/en/heroes/t/infinite-reconnecting-screen/26423) which is some odd bug in the game which was never fixed.
 
 ### Frostpunk
 - Client: Heroic Games Launcher
 - Game acquired via: GOG Galaxy
 - Native platform(s): Windows
 
-There was no issue with playing the game. It runs fluent and had no issues when tabbing in and out. The cloud saves made some difficulties, but this seems to be game rather than platform specific.
+There was no issue with playing the game. It runs fluent and had no issues when tabbing in and out. The cloud saves caused some difficulties, but this seems to be game rather than platform specific.
 
 ### Elden Ring
 - Client: Steam
@@ -101,7 +101,7 @@ This masterpiece is surely the most resource intense game on the list. Neverthel
 
 Generally speaking games which use kernel-level anti-cheat technology might not run on linux due to the use of Wine or Proton. A list of games relying on kernel-level anti-cheat can be found [here](https://www.pcgamingwiki.com/wiki/List_of_games_with_anti-cheat_technology). If you look at the list very carefully, you will see that Elden Ring also uses kernel-level anti-cheat. This was no issue for me, as I was not playing online.
 
-While I have a strong opinion that kernel-level anti-cheat gaming software should not be used, because the kernel is not a place for user software. Especially not gaming software. A human friendly one minute explanation can be found on [Youtube from Pirate Software below](https://www.youtube.com/watch?v=V1HwhwXelZo):
+I have a strong opinion that kernel-level anti-cheat gaming software should not be used, because the kernel is not a place for user software. Especially not gaming software. A human friendly one minute explanation can be found on [Youtube from Pirate Software below](https://www.youtube.com/watch?v=V1HwhwXelZo):
 {{< youtube V1HwhwXelZo>}}
 
 ## Conclusion
