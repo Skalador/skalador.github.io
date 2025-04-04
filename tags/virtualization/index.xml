@@ -1,0 +1,1119 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Virtualization on Kevin Niederwanger</title><link>https://www.niederwanger.dev/tags/virtualization/</link><description>Recent content in Virtualization on Kevin Niederwanger</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Tue, 18 Feb 2025 00:00:00 +0000</lastBuildDate><atom:link href="https://www.niederwanger.dev/tags/virtualization/index.xml" rel="self" type="application/rss+xml"/><item><title>KubeVirt with libvirt/QEMU/KVM in Kind</title><link>https://www.niederwanger.dev/p/kubevirt-to-run-vms-on-k8s/</link><pubDate>Tue, 18 Feb 2025 00:00:00 +0000</pubDate><guid>https://www.niederwanger.dev/p/kubevirt-to-run-vms-on-k8s/</guid><description>&lt;img src="https://www.niederwanger.dev/p/kubevirt-to-run-vms-on-k8s/cover.png" alt="Featured image of post KubeVirt with libvirt/QEMU/KVM in Kind" />&lt;h2 id="bridging-the-gap-between-virtual-machines-and-kubernetes-with-kubevirt">Bridging the Gap Between Virtual Machines and Kubernetes with KubeVirt
+&lt;/h2>&lt;p>This blog post will provide a brief introduction to the open source &lt;a class="link" href="https://www.cncf.io/" target="_blank" rel="noopener"
+>CNCF&lt;/a> project &lt;a class="link" href="https://kubevirt.io/" target="_blank" rel="noopener"
+>KubeVirt&lt;/a>. KubeVirt (alongside &lt;a class="link" href="https://linux-kvm.org/page/Main_Page" target="_blank" rel="noopener"
+>Kernel-based Virtual Machine (KVM)&lt;/a>/&lt;a class="link" href="https://libvirt.org/" target="_blank" rel="noopener"
+>libvirt&lt;/a>/&lt;a class="link" href="https://www.qemu.org/" target="_blank" rel="noopener"
+>QEMU&lt;/a>) is one of the foundational components included in &lt;a class="link" href="https://www.redhat.com/en/technologies/cloud-computing/openshift/virtualization" target="_blank" rel="noopener"
+>OpenShift Virtualization&lt;/a>. A more detailed relationship can be found on the &lt;a class="link" href="https://github.com/kubevirt/hyperconverged-cluster-operator" target="_blank" rel="noopener"
+>Hyperconverged Cluster Operator&lt;/a> for OpenShift Container Platform (OCP). While this blog post shall be focused on the upstream project KubeVirt, I have to provided full credit to OpenShift Virtualization along the lines, because most of my lessons learned are originated there.&lt;/p>
+&lt;blockquote>
+&lt;p>&lt;strong>If you are just interested in the demo, please head over to section &lt;a class="link" href="#kubevirt-with-libvirtqemukvm-in-kind" >KubeVirt with libvirt/QEMU/KVM in kind&lt;/a>.&lt;/strong>&lt;/p>&lt;/blockquote>
+&lt;h2 id="why-kubevirt--openshift-virtualization">Why KubeVirt / OpenShift Virtualization?
+&lt;/h2>&lt;p>&lt;a class="link" href="https://kubevirt.io/" target="_blank" rel="noopener"
+>KubeVirt&lt;/a> / OpenShift Virtualization allows you to operate virtual machines (VMs) on &lt;a class="link" href="https://kubernetes.io/" target="_blank" rel="noopener"
+>Kubernetes&lt;/a> / &lt;a class="link" href="https://www.redhat.com/en/technologies/cloud-computing/openshift" target="_blank" rel="noopener"
+>OpenShift&lt;/a>. I have come across several different reasons why companies would want to look into this topic. Please let me elaborate on some reasons:&lt;/p>
+&lt;ul>
+&lt;li>Migrate VMs to microservices at your pace
+&lt;ul>
+&lt;li>KubeVirt / OpenShift Virtualization can be an interim solution when you are migrating your workloads towards containers anyway and need to host them on your k8s based platform temporary. This is especially true when you are using the &lt;a class="link" href="https://docs.redhat.com/en/documentation/migration_toolkit_for_virtualization/latest/html/installing_and_using_the_migration_toolkit_for_virtualization/index" target="_blank" rel="noopener"
+>Migration Toolkit for Virtualization&lt;/a> on OpenShift for the initial migration.&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>Legacy applications need VMs
+&lt;ul>
+&lt;li>Some applications might not be worth to modernize to container technology as their is no commercial benefit. Thus you will leave them as is in a VM until the end of the application lifecycle.&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>Reduce technology spread (Hypervisor + K8s / OCP)
+&lt;ul>
+&lt;li>Some companies are looking for a way to reduce the technology spread in their existing infrastructure.&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>Replace hypervisor and save costs $$$
+&lt;ul>
+&lt;li>The layer of a hypervisor is introducing additional costs on your infrastructure which can be avoided when using kubernetes / OpenShift on bare metal servers.&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>Need virtualization technology for certain requirements
+&lt;ul>
+&lt;li>Companies could be forced to use virtualization technology to comply with some of their requirements, especially in the realm of public and critical infrastructure.&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ul>
+&lt;h2 id="why-openshift-virtualization-instead-of-upstream-kubevirt">Why OpenShift Virtualization instead of upstream KubeVirt?
+&lt;/h2>&lt;p>From the above reasons you could think that OpenShift Virtualization might be fully interchangeable with KubeVirt. Nevertheless there are some key differences:&lt;/p>
+&lt;ul>
+&lt;li>OpenShift Virtualization is running on OpenShift thus uses &lt;a class="link" href="https://docs.redhat.com/en/documentation/openshift_container_platform/latest/html/architecture/architecture-rhcos" target="_blank" rel="noopener"
+>Red Hat Enterprise Linux CoreOS (RHCOS)&lt;/a> as the underlying operating system.
+&lt;ul>
+&lt;li>RHCOS is the downstream version of &lt;a class="link" href="https://fedoraproject.org/coreos/" target="_blank" rel="noopener"
+>Fedora CoreOS&lt;/a>.&lt;/li>
+&lt;li>Red Hat has a very long and successful history with
+&lt;ul>
+&lt;li>Red Hat Enterprise Linux (RHEL) and&lt;/li>
+&lt;li>Virtualization with the &lt;a class="link" href="https://linux-kvm.org/page/Main_Page" target="_blank" rel="noopener"
+>KVM&lt;/a>/&lt;a class="link" href="https://libvirt.org/" target="_blank" rel="noopener"
+>libvirt&lt;/a>/&lt;a class="link" href="https://www.qemu.org/" target="_blank" rel="noopener"
+>QEMU&lt;/a> stack in &lt;a class="link" href="https://en.wikipedia.org/wiki/Red_Hat_Virtualization" target="_blank" rel="noopener"
+>Red Hat Virtualization&lt;/a> and &lt;a class="link" href="https://access.redhat.com/products/red-hat-openstack-platform" target="_blank" rel="noopener"
+>Red Hat OpenStack Platform&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>OpenShift has full commercial support from Red Hat. This includes multi-vendor support which can be relevant especially when you are facing issues on the storage side.&lt;/li>
+&lt;li>OpenShift Virtualization can be easily setup and managed throughout the lifecycle via the &lt;a class="link" href="https://olm.operatorframework.io/" target="_blank" rel="noopener"
+>Operator Lifecycle Manager&lt;/a> on OpenShift.&lt;/li>
+&lt;/ul>
+&lt;h2 id="how-does-kubevirt-work">How does KubeVirt work?
+&lt;/h2>&lt;p>A detailed explanation about KubeVirt can be found on the official &lt;a class="link" href="https://kubevirt.io/user-guide/architecture/" target="_blank" rel="noopener"
+>KubeVirt website&lt;/a>. Simply put, KubeVirt will provide a &lt;code>Controller&lt;/code> and &lt;code>API&lt;/code> server on the control plane and some &lt;code>Agents&lt;/code> on the worker nodes. You can interact with the custom resources via the kubernetes API server which will allow you to interact with the virtual machines. The virtual machines are created via the &lt;a class="link" href="https://libvirt.org/" target="_blank" rel="noopener"
+>libvirt&lt;/a> daemon which leverages &lt;a class="link" href="https://www.qemu.org/" target="_blank" rel="noopener"
+>QEMU&lt;/a> and the &lt;a class="link" href="https://linux-kvm.org/page/Main_Page" target="_blank" rel="noopener"
+>KVM&lt;/a> components on Linux.&lt;/p>
+&lt;p>&lt;img src="https://kubevirt.io/user-guide/assets/architecture-simple.png"
+loading="lazy"
+>
+&lt;img src="https://kubevirt.io/user-guide/assets/architecture.png"
+loading="lazy"
+>&lt;/p>
+&lt;h2 id="kubevirt-with-libvirtqemukvm-in-kind">KubeVirt with libvirt/QEMU/KVM in kind
+&lt;/h2>&lt;p>Before we move ahead make sure to provision the setup on a linux machine, because there you will have access to the libvirt/QEMU/KVM stack. Other platform, e.g. MacOS, might use other hypervisor technology and you could run into issues. More specifically, you might run into &lt;a class="link" href="https://github.com/kubevirt/kubevirt/issues/11917" target="_blank" rel="noopener"
+>kubevirt/issues/11917&lt;/a> on Apple hardware.&lt;/p>
+&lt;h3 id="setup-kind-and-kubevirt">Setup kind and KubeVirt
+&lt;/h3>&lt;p>To setup your machine please follow these instructions:&lt;/p>
+&lt;ul>
+&lt;li>&lt;a class="link" href="https://kubernetes.io/docs/tasks/tools/" target="_blank" rel="noopener"
+>Setup &lt;code>kubectl&lt;/code>&lt;/a>&lt;/li>
+&lt;li>While I generally advocate for the &lt;a class="link" href="https://podman.io/docs/installation" target="_blank" rel="noopener"
+>rootless &lt;code>Podman&lt;/code>&lt;/a>, it is easier to get started with the &lt;a class="link" href="https://docs.docker.com/engine/install/" target="_blank" rel="noopener"
+>&lt;code>Docker&lt;/code> driver&lt;/a>&lt;/li>
+&lt;li>&lt;a class="link" href="https://kind.sigs.k8s.io/docs/user/quick-start/#installation" target="_blank" rel="noopener"
+>Setup &lt;code>kind&lt;/code>&lt;/a>&lt;/li>
+&lt;li>Install &lt;code>virtctl&lt;/code> a &lt;a class="link" href="https://kubevirt.io/quickstart_kind/" target="_blank" rel="noopener"
+>binary from the KubeVirt project to manage the VMs&lt;/a>
+&lt;ul>
+&lt;li>Via Github
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">&lt;span class="nb">export&lt;/span> &lt;span class="nv">VERSION&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="k">$(&lt;/span>curl -s https://storage.googleapis.com/kubevirt-prow/release/kubevirt/kubevirt/stable.txt&lt;span class="k">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">ARCH&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="k">$(&lt;/span>uname -s &lt;span class="p">|&lt;/span> tr A-Z a-z&lt;span class="k">)&lt;/span>-&lt;span class="k">$(&lt;/span>uname -m &lt;span class="p">|&lt;/span> sed &lt;span class="s1">&amp;#39;s/x86_64/amd64/&amp;#39;&lt;/span>&lt;span class="k">)&lt;/span> &lt;span class="o">||&lt;/span> windows-amd64.exe
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nb">echo&lt;/span> &lt;span class="si">${&lt;/span>&lt;span class="nv">ARCH&lt;/span>&lt;span class="si">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">curl -L -o virtctl https://github.com/kubevirt/kubevirt/releases/download/&lt;span class="si">${&lt;/span>&lt;span class="nv">VERSION&lt;/span>&lt;span class="si">}&lt;/span>/virtctl-&lt;span class="si">${&lt;/span>&lt;span class="nv">VERSION&lt;/span>&lt;span class="si">}&lt;/span>-&lt;span class="si">${&lt;/span>&lt;span class="nv">ARCH&lt;/span>&lt;span class="si">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">chmod +x virtctl
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">sudo install virtctl /usr/local/bin
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;/li>
+&lt;li>Via &lt;a class="link" href="https://github.com/kubernetes-sigs/krew/" target="_blank" rel="noopener"
+>&lt;code>krew&lt;/code>&lt;/a>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">kubectl krew install virt
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>Install the libvirt/QEMU/KVM stack for your linux distribution. For Fedora you can find a &lt;a class="link" href="https://docs.fedoraproject.org/en-US/quick-docs/virtualization-getting-started/#_installing_virtualization_software" target="_blank" rel="noopener"
+>guide here&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;h3 id="provision-kind-cluster-with-kubevirt">Provision kind cluster with KubeVirt
+&lt;/h3>&lt;p>First of all we create a cluster with one &lt;code>control-plane&lt;/code> node and two &lt;code>worker&lt;/code> nodes:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;span class="lnt">8
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">cat &lt;span class="s">&amp;lt;&amp;lt; EOF &amp;gt; kind-config.yaml
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s">kind: Cluster
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s">apiVersion: kind.x-k8s.io/v1alpha4
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s">nodes:
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s">- role: control-plane
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s">- role: worker
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s">- role: worker
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s">EOF&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Then we create a &lt;code>bash&lt;/code> script which does the following:&lt;/p>
+&lt;ul>
+&lt;li>Create a &lt;code>kind&lt;/code> cluster with the &lt;code>kind-config.yaml&lt;/code> config&lt;/li>
+&lt;li>Following the &lt;a class="link" href="https://kubevirt.io/quickstart_kind/" target="_blank" rel="noopener"
+>kubevirt instructions&lt;/a> to install the kubevirt operator&lt;/li>
+&lt;li>Following the &lt;a class="link" href="https://kubevirt.io/labs/kubernetes/lab1.html" target="_blank" rel="noopener"
+>kubevirt lab&lt;/a> to provision and start an ephemeral &lt;a class="link" href="https://kubevirt.io/user-guide/storage/disks_and_volumes/#containerdisk" target="_blank" rel="noopener"
+>container disk&lt;/a> VM&lt;/li>
+&lt;li>Following the &lt;a class="link" href="https://kubevirt.io/labs/kubernetes/lab2.html" target="_blank" rel="noopener"
+>kubevirt instructions on Containerized Data Importer (CDI) operator&lt;/a> to provision a persistent VM&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;span class="lnt">29
+&lt;/span>&lt;span class="lnt">30
+&lt;/span>&lt;span class="lnt">31
+&lt;/span>&lt;span class="lnt">32
+&lt;/span>&lt;span class="lnt">33
+&lt;/span>&lt;span class="lnt">34
+&lt;/span>&lt;span class="lnt">35
+&lt;/span>&lt;span class="lnt">36
+&lt;/span>&lt;span class="lnt">37
+&lt;/span>&lt;span class="lnt">38
+&lt;/span>&lt;span class="lnt">39
+&lt;/span>&lt;span class="lnt">40
+&lt;/span>&lt;span class="lnt">41
+&lt;/span>&lt;span class="lnt">42
+&lt;/span>&lt;span class="lnt">43
+&lt;/span>&lt;span class="lnt">44
+&lt;/span>&lt;span class="lnt">45
+&lt;/span>&lt;span class="lnt">46
+&lt;/span>&lt;span class="lnt">47
+&lt;/span>&lt;span class="lnt">48
+&lt;/span>&lt;span class="lnt">49
+&lt;/span>&lt;span class="lnt">50
+&lt;/span>&lt;span class="lnt">51
+&lt;/span>&lt;span class="lnt">52
+&lt;/span>&lt;span class="lnt">53
+&lt;/span>&lt;span class="lnt">54
+&lt;/span>&lt;span class="lnt">55
+&lt;/span>&lt;span class="lnt">56
+&lt;/span>&lt;span class="lnt">57
+&lt;/span>&lt;span class="lnt">58
+&lt;/span>&lt;span class="lnt">59
+&lt;/span>&lt;span class="lnt">60
+&lt;/span>&lt;span class="lnt">61
+&lt;/span>&lt;span class="lnt">62
+&lt;/span>&lt;span class="lnt">63
+&lt;/span>&lt;span class="lnt">64
+&lt;/span>&lt;span class="lnt">65
+&lt;/span>&lt;span class="lnt">66
+&lt;/span>&lt;span class="lnt">67
+&lt;/span>&lt;span class="lnt">68
+&lt;/span>&lt;span class="lnt">69
+&lt;/span>&lt;span class="lnt">70
+&lt;/span>&lt;span class="lnt">71
+&lt;/span>&lt;span class="lnt">72
+&lt;/span>&lt;span class="lnt">73
+&lt;/span>&lt;span class="lnt">74
+&lt;/span>&lt;span class="lnt">75
+&lt;/span>&lt;span class="lnt">76
+&lt;/span>&lt;span class="lnt">77
+&lt;/span>&lt;span class="lnt">78
+&lt;/span>&lt;span class="lnt">79
+&lt;/span>&lt;span class="lnt">80
+&lt;/span>&lt;span class="lnt">81
+&lt;/span>&lt;span class="lnt">82
+&lt;/span>&lt;span class="lnt">83
+&lt;/span>&lt;span class="lnt">84
+&lt;/span>&lt;span class="lnt">85
+&lt;/span>&lt;span class="lnt">86
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">&lt;span class="cp">#!/bin/bash
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="cp">&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nb">set&lt;/span> -euo pipefail &lt;span class="c1"># Enable strict error handling&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Define color codes&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">RED&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s1">&amp;#39;\033[0;31m&amp;#39;&lt;/span> &lt;span class="c1"># Red (Errors)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">GREEN&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s1">&amp;#39;\033[0;32m&amp;#39;&lt;/span> &lt;span class="c1"># Green (Success)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">YELLOW&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s1">&amp;#39;\033[0;33m&amp;#39;&lt;/span> &lt;span class="c1"># Yellow (Warnings)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">BLUE&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s1">&amp;#39;\033[0;34m&amp;#39;&lt;/span> &lt;span class="c1"># Blue (Info)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">NC&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s1">&amp;#39;\033[0m&amp;#39;&lt;/span> &lt;span class="c1"># No Color (Reset)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Function to check if a command exists&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">command_exists&lt;span class="o">()&lt;/span> &lt;span class="o">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">command&lt;/span> -v &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="nv">$1&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span> &amp;gt;/dev/null 2&amp;gt;&lt;span class="p">&amp;amp;&lt;/span>&lt;span class="m">1&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Ensure required commands are installed&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">for&lt;/span> cmd in kind kubectl curl virtctl&lt;span class="p">;&lt;/span> &lt;span class="k">do&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">if&lt;/span> ! command_exists &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="nv">$cmd&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="k">then&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">echo&lt;/span> -e &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">RED&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">Error: &amp;#39;&lt;/span>&lt;span class="nv">$cmd&lt;/span>&lt;span class="s2">&amp;#39; is not installed. Please install it before running this script.&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">NC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">exit&lt;/span> &lt;span class="m">1&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="k">fi&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">done&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nb">echo&lt;/span> -e &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BLUE&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">Creating Kubernetes cluster...&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">NC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kind create cluster --config&lt;span class="o">=&lt;/span>kind-config.yaml &lt;span class="o">||&lt;/span> &lt;span class="o">{&lt;/span> &lt;span class="nb">echo&lt;/span> -e &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">RED&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">Failed to create cluster&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">NC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="nb">exit&lt;/span> 1&lt;span class="p">;&lt;/span> &lt;span class="o">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nb">echo&lt;/span> -e &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BLUE&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">Fetching latest KubeVirt version...&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">NC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">VERSION&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="k">$(&lt;/span>curl -fsSL https://storage.googleapis.com/kubevirt-prow/release/kubevirt/kubevirt/stable.txt&lt;span class="k">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nb">echo&lt;/span> -e &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">GREEN&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">Using KubeVirt version: &lt;/span>&lt;span class="nv">$VERSION&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">NC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nb">echo&lt;/span> -e &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BLUE&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">Deploying KubeVirt operator...&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">NC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kubectl apply -f &lt;span class="s2">&amp;#34;https://github.com/kubevirt/kubevirt/releases/download/&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">VERSION&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">/kubevirt-operator.yaml&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nb">echo&lt;/span> -e &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BLUE&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">Waiting for KubeVirt operator to be ready...&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">NC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kubectl &lt;span class="nb">wait&lt;/span> --for&lt;span class="o">=&lt;/span>&lt;span class="nv">condition&lt;/span>&lt;span class="o">=&lt;/span>available --timeout&lt;span class="o">=&lt;/span>120s -n kubevirt deployments -l kubevirt.io
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nb">echo&lt;/span> -e &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BLUE&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">Deploying KubeVirt custom resource...&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">NC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kubectl apply -f &lt;span class="s2">&amp;#34;https://github.com/kubevirt/kubevirt/releases/download/&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">VERSION&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">/kubevirt-cr.yaml&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nb">echo&lt;/span> -e &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BLUE&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">Waiting for KubeVirt to be fully initialized...&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">NC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kubectl &lt;span class="nb">wait&lt;/span> --for&lt;span class="o">=&lt;/span>&lt;span class="nv">condition&lt;/span>&lt;span class="o">=&lt;/span>Available --timeout&lt;span class="o">=&lt;/span>300s kubevirt/kubevirt -n kubevirt &lt;span class="o">||&lt;/span> &lt;span class="o">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">echo&lt;/span> -e &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">RED&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">KubeVirt deployment failed!&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">NC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">exit&lt;/span> &lt;span class="m">1&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">VM_MANIFEST&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;https://kubevirt.io/labs/manifests/vm.yaml&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nb">echo&lt;/span> -e &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BLUE&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">Applying Virtual Machine manifest from &lt;/span>&lt;span class="nv">$VM_MANIFEST&lt;/span>&lt;span class="s2">...&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">NC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kubectl apply -f &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="nv">$VM_MANIFEST&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Show VM YAML if &amp;#39;bat&amp;#39; is installed&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">if&lt;/span> command_exists bat&lt;span class="p">;&lt;/span> &lt;span class="k">then&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">echo&lt;/span> -e &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BLUE&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">Displaying VM manifest...&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">NC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> curl -s &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="nv">$VM_MANIFEST&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span> &lt;span class="p">|&lt;/span> bat --language yaml
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="k">fi&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Wait briefly for the VM to be registered&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">sleep &lt;span class="m">5&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nb">echo&lt;/span> -e &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BLUE&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">Starting test VM...&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">NC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">virtctl start testvm &lt;span class="o">||&lt;/span> &lt;span class="o">{&lt;/span> &lt;span class="nb">echo&lt;/span> -e &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">RED&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">Failed to start VM&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">NC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="p">;&lt;/span> &lt;span class="nb">exit&lt;/span> 1&lt;span class="p">;&lt;/span> &lt;span class="o">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nb">echo&lt;/span> -e &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">GREEN&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2"> KubeVirt setup complete. Test VM started successfully!&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">NC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># ---------------------------------------------&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># Containerized Data Importer (CDI) Deployment&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="c1"># ---------------------------------------------&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nb">echo&lt;/span> -e &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BLUE&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">Fetching latest Containerized Data Importer (CDI) version...&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">NC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">TAG&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="k">$(&lt;/span>curl -s -w %&lt;span class="o">{&lt;/span>redirect_url&lt;span class="o">}&lt;/span> https://github.com/kubevirt/containerized-data-importer/releases/latest&lt;span class="k">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">VERSION&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="k">$(&lt;/span>&lt;span class="nb">echo&lt;/span> &lt;span class="si">${&lt;/span>&lt;span class="nv">TAG&lt;/span>&lt;span class="p">##*/&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="k">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nb">echo&lt;/span> -e &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">GREEN&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">Using CDI version: &lt;/span>&lt;span class="nv">$VERSION&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">NC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nb">echo&lt;/span> -e &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BLUE&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">Deploying CDI operator...&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">NC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kubectl apply -f &lt;span class="s2">&amp;#34;https://github.com/kubevirt/containerized-data-importer/releases/download/&lt;/span>&lt;span class="nv">$VERSION&lt;/span>&lt;span class="s2">/cdi-operator.yaml&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nb">echo&lt;/span> -e &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BLUE&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">Deploying CDI custom resource...&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">NC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kubectl apply -f &lt;span class="s2">&amp;#34;https://github.com/kubevirt/containerized-data-importer/releases/download/&lt;/span>&lt;span class="nv">$VERSION&lt;/span>&lt;span class="s2">/cdi-cr.yaml&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nb">echo&lt;/span> -e &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">BLUE&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">Waiting for CDI to be fully initialized...&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">NC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kubectl &lt;span class="nb">wait&lt;/span> --for&lt;span class="o">=&lt;/span>&lt;span class="nv">condition&lt;/span>&lt;span class="o">=&lt;/span>Available --timeout&lt;span class="o">=&lt;/span>300s cdi/cdi -n cdi &lt;span class="o">||&lt;/span> &lt;span class="o">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">echo&lt;/span> -e &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">RED&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">CDI deployment failed!&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">NC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="nb">exit&lt;/span> &lt;span class="m">1&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nb">echo&lt;/span> -e &lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">GREEN&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">CDI setup complete!&lt;/span>&lt;span class="si">${&lt;/span>&lt;span class="nv">NC&lt;/span>&lt;span class="si">}&lt;/span>&lt;span class="s2">&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h3 id="experimenting-with-the-containerdisk-vm">Experimenting with the containerdisk VM
+&lt;/h3>&lt;p>After executing the above &lt;code>bash&lt;/code> script we should have the following &lt;code>nodes&lt;/code>:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ kubectl get nodes
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">AME STATUS ROLES AGE VERSION
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kind-control-plane Ready control-plane 22h v1.32.0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kind-worker Ready &amp;lt;none&amp;gt; 22h v1.32.0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kind-worker2 Ready &amp;lt;none&amp;gt; 22h v1.32.0
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>We have applied the following &lt;code>VirtualMachine&lt;/code> to the cluster:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;span class="lnt">29
+&lt;/span>&lt;span class="lnt">30
+&lt;/span>&lt;span class="lnt">31
+&lt;/span>&lt;span class="lnt">32
+&lt;/span>&lt;span class="lnt">33
+&lt;/span>&lt;span class="lnt">34
+&lt;/span>&lt;span class="lnt">35
+&lt;/span>&lt;span class="lnt">36
+&lt;/span>&lt;span class="lnt">37
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="line">&lt;span class="cl">&lt;span class="nt">apiVersion&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">kubevirt.io/v1&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="nt">kind&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">VirtualMachine&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="nt">metadata&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">name&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">testvm&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="nt">spec&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">runStrategy&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">Halted&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">template&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">metadata&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">labels&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">kubevirt.io/size&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">small&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">kubevirt.io/domain&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">testvm&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">spec&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">domain&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">devices&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">disks&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>- &lt;span class="nt">name&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">containerdisk&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">disk&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">bus&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">virtio&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>- &lt;span class="nt">name&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">cloudinitdisk&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">disk&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">bus&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">virtio&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">interfaces&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>- &lt;span class="nt">name&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">default&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">masquerade&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>{}&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">resources&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">requests&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">memory&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">64M&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">networks&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>- &lt;span class="nt">name&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">default&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">pod&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>{}&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">volumes&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>- &lt;span class="nt">name&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">containerdisk&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">containerDisk&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">image&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">quay.io/kubevirt/cirros-container-disk-demo&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>- &lt;span class="nt">name&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">cloudinitdisk&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">cloudInitNoCloud&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">userDataBase64&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">SGkuXG4=&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>This is a &lt;code>VirtualMachine&lt;/code> which uses a &lt;code>containerDisk&lt;/code>. A &lt;code>containerDisk&lt;/code> is a ephemeral VM disk from a container image registry. We have not claimed any persistent storage with this &lt;code>VirtualMachine&lt;/code>. Consequently will a &lt;code>reboot&lt;/code> of this VM also result in a loss of all data.&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ kubectl get pvc
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">No resources found in default namespace
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Despite the fact, that the use of a &lt;code>containerDisk&lt;/code> is not the main goal of &lt;code>KubeVirt&lt;/code>, we can still use this &lt;code>VirtualMachine&lt;/code> to understand the behaviour of &lt;code>KubeVirt&lt;/code> components.&lt;/p>
+&lt;p>There should be a &lt;code>VirtualMachine&lt;/code> in &lt;code>Running&lt;/code> state:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ kubectl get virtualmachine
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">NAME AGE STATUS READY
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">testvm 22h Running True
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>When a &lt;code>VirtualMachine&lt;/code> is running, then there should also be a &lt;code>VirtualMachineInstance&lt;/code> with the exact same name &lt;code>testvm&lt;/code>:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ kubectl get virtualmachineinstance
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">NAME AGE PHASE IP NODENAME READY
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">testvm 20h Running 10.244.2.16 kind-worker True
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>The &lt;code>VirtualMachine&lt;/code> is actually running inside the &lt;code>virt-launcher-testvm-65f42&lt;/code> &lt;code>Pod&lt;/code>:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ kubectl get pods
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">NAME READY STATUS RESTARTS AGE
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">virt-launcher-testvm-65f42 3/3 Running &lt;span class="m">0&lt;/span> 20h
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>We can now check which processes are running inside this &lt;code>virt-launcher-testvm-65f42&lt;/code> &lt;code>Pod&lt;/code>:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;span class="lnt">29
+&lt;/span>&lt;span class="lnt">30
+&lt;/span>&lt;span class="lnt">31
+&lt;/span>&lt;span class="lnt">32
+&lt;/span>&lt;span class="lnt">33
+&lt;/span>&lt;span class="lnt">34
+&lt;/span>&lt;span class="lnt">35
+&lt;/span>&lt;span class="lnt">36
+&lt;/span>&lt;span class="lnt">37
+&lt;/span>&lt;span class="lnt">38
+&lt;/span>&lt;span class="lnt">39
+&lt;/span>&lt;span class="lnt">40
+&lt;/span>&lt;span class="lnt">41
+&lt;/span>&lt;span class="lnt">42
+&lt;/span>&lt;span class="lnt">43
+&lt;/span>&lt;span class="lnt">44
+&lt;/span>&lt;span class="lnt">45
+&lt;/span>&lt;span class="lnt">46
+&lt;/span>&lt;span class="lnt">47
+&lt;/span>&lt;span class="lnt">48
+&lt;/span>&lt;span class="lnt">49
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ kubectl &lt;span class="nb">exec&lt;/span> -it &lt;span class="k">$(&lt;/span>kubectl get pod -l&lt;span class="o">=&lt;/span>vm.kubevirt.io/name&lt;span class="o">=&lt;/span>testvm -o custom-columns&lt;span class="o">=&lt;/span>&lt;span class="s1">&amp;#39;:metadata.name&amp;#39;&lt;/span> --no-headers&lt;span class="k">)&lt;/span> -- ps -ef
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">UID PID PPID C STIME TTY TIME CMD
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">qemu &lt;span class="m">1&lt;/span> &lt;span class="m">0&lt;/span> &lt;span class="m">0&lt;/span> Feb16 ? 00:00:00 /usr/bin/virt-launcher-monitor --qemu-timeout 312s --name testvm --uid a726afe8-d14f-4930-8240-86b47a25b547 --namespace
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">default --kubevirt-share-dir /var/run/kubevirt --ephemeral-disk-dir /var/run/kubevirt-ephemeral-disks --container-disk-dir /var/run/kubevirt/container-disks --grace-period-
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">seconds &lt;span class="m">45&lt;/span> --hook-sidecars &lt;span class="m">0&lt;/span> --ovmf-path /usr/share/OVMF --run-as-nonroot
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">qemu &lt;span class="m">19&lt;/span> &lt;span class="m">1&lt;/span> &lt;span class="m">0&lt;/span> Feb16 ? 00:00:24 /usr/bin/virt-launcher --qemu-timeout 312s --name testvm --uid a726afe8-d14f-4930-8240-86b47a25b547 --namespace default
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">--kubevirt-share-dir /var/run/kubevirt --ephemeral-disk-dir /var/run/kubevirt-ephemeral-disks --container-disk-dir /var/run/kubevirt/container-disks --grace-period-seconds
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="m">45&lt;/span> --hook-sidecars &lt;span class="m">0&lt;/span> --ovmf-path /usr/share/OVMF --run-as-nonroot
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">qemu &lt;span class="m">31&lt;/span> &lt;span class="m">19&lt;/span> &lt;span class="m">0&lt;/span> Feb16 ? 00:00:02 /usr/sbin/virtqemud -f /var/run/libvirt/virtqemud.conf
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">qemu &lt;span class="m">32&lt;/span> &lt;span class="m">19&lt;/span> &lt;span class="m">0&lt;/span> Feb16 ? 00:00:00 /usr/sbin/virtlogd -f /etc/libvirt/virtlogd.conf
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">qemu &lt;span class="m">89&lt;/span> &lt;span class="m">1&lt;/span> &lt;span class="m">0&lt;/span> Feb16 ? 00:00:21 /usr/libexec/qemu-kvm -name &lt;span class="nv">guest&lt;/span>&lt;span class="o">=&lt;/span>default_testvm,debug-threads&lt;span class="o">=&lt;/span>on -S -object &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;qom-type&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;secret&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;masterKey0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;for
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">mat&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;raw&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;file&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;/var/run/kubevirt-private/libvirt/qemu/lib/domain-1-default_testvm/master-key.aes&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -machine pc-q35-rhel9.4.0,usb&lt;span class="o">=&lt;/span>off,dump-guest-core&lt;span class="o">=&lt;/span>off,memory-backend&lt;span class="o">=&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">pc.ram,acpi&lt;span class="o">=&lt;/span>on -accel kvm -cpu Haswell-noTSX-IBRS,vmx&lt;span class="o">=&lt;/span>on,pdcm&lt;span class="o">=&lt;/span>on,f16c&lt;span class="o">=&lt;/span>on,rdrand&lt;span class="o">=&lt;/span>on,hypervisor&lt;span class="o">=&lt;/span>on,vme&lt;span class="o">=&lt;/span>on,ss&lt;span class="o">=&lt;/span>on,arat&lt;span class="o">=&lt;/span>on,tsc-adjust&lt;span class="o">=&lt;/span>on,umip&lt;span class="o">=&lt;/span>on,md-clear&lt;span class="o">=&lt;/span>on,stibp&lt;span class="o">=&lt;/span>on,flush-l1d&lt;span class="o">=&lt;/span>o
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">n,arch-capabilities&lt;span class="o">=&lt;/span>on,ssbd&lt;span class="o">=&lt;/span>on,xsaveopt&lt;span class="o">=&lt;/span>on,abm&lt;span class="o">=&lt;/span>on,pdpe1gb&lt;span class="o">=&lt;/span>on,ibpb&lt;span class="o">=&lt;/span>on,ibrs&lt;span class="o">=&lt;/span>on,amd-stibp&lt;span class="o">=&lt;/span>on,amd-ssbd&lt;span class="o">=&lt;/span>on,skip-l1dfl-vmentry&lt;span class="o">=&lt;/span>on,pschange-mc-no&lt;span class="o">=&lt;/span>on,gds-no&lt;span class="o">=&lt;/span>on,vmx-ins-outs&lt;span class="o">=&lt;/span>on,vmx-
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">true-ctls&lt;span class="o">=&lt;/span>on,vmx-store-lma&lt;span class="o">=&lt;/span>on,vmx-activity-hlt&lt;span class="o">=&lt;/span>on,vmx-activity-wait-sipi&lt;span class="o">=&lt;/span>on,vmx-vmwrite-vmexit-fields&lt;span class="o">=&lt;/span>on,vmx-apicv-xapic&lt;span class="o">=&lt;/span>on,vmx-ept&lt;span class="o">=&lt;/span>on,vmx-desc-exit&lt;span class="o">=&lt;/span>on,vmx-rdtscp-exit&lt;span class="o">=&lt;/span>on,v
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">mx-apicv-x2apic&lt;span class="o">=&lt;/span>on,vmx-vpid&lt;span class="o">=&lt;/span>on,vmx-wbinvd-exit&lt;span class="o">=&lt;/span>on,vmx-unrestricted-guest&lt;span class="o">=&lt;/span>on,vmx-apicv-register&lt;span class="o">=&lt;/span>on,vmx-apicv-vid&lt;span class="o">=&lt;/span>on,vmx-rdrand-exit&lt;span class="o">=&lt;/span>on,vmx-invpcid-exit&lt;span class="o">=&lt;/span>on,vmx-vmfunc&lt;span class="o">=&lt;/span>on,vmx-
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">shadow-vmcs&lt;span class="o">=&lt;/span>on,vmx-pml&lt;span class="o">=&lt;/span>on,vmx-ept-execonly&lt;span class="o">=&lt;/span>on,vmx-page-walk-4&lt;span class="o">=&lt;/span>on,vmx-ept-2mb&lt;span class="o">=&lt;/span>on,vmx-ept-1gb&lt;span class="o">=&lt;/span>on,vmx-invept&lt;span class="o">=&lt;/span>on,vmx-eptad&lt;span class="o">=&lt;/span>on,vmx-invept-single-context&lt;span class="o">=&lt;/span>on,vmx-invept-all-contex
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">t&lt;/span>&lt;span class="o">=&lt;/span>on,vmx-invvpid&lt;span class="o">=&lt;/span>on,vmx-invvpid-single-addr&lt;span class="o">=&lt;/span>on,vmx-invvpid-all-context&lt;span class="o">=&lt;/span>on,vmx-intr-exit&lt;span class="o">=&lt;/span>on,vmx-nmi-exit&lt;span class="o">=&lt;/span>on,vmx-vnmi&lt;span class="o">=&lt;/span>on,vmx-preemption-timer&lt;span class="o">=&lt;/span>on,vmx-posted-intr&lt;span class="o">=&lt;/span>on,vmx-vintr-
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">pending&lt;/span>&lt;span class="o">=&lt;/span>on,vmx-tsc-offset&lt;span class="o">=&lt;/span>on,vmx-hlt-exit&lt;span class="o">=&lt;/span>on,vmx-invlpg-exit&lt;span class="o">=&lt;/span>on,vmx-mwait-exit&lt;span class="o">=&lt;/span>on,vmx-rdpmc-exit&lt;span class="o">=&lt;/span>on,vmx-rdtsc-exit&lt;span class="o">=&lt;/span>on,vmx-cr3-load-noexit&lt;span class="o">=&lt;/span>on,vmx-cr3-store-noexit&lt;span class="o">=&lt;/span>on,vmx-cr8
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">-load-exit&lt;span class="o">=&lt;/span>on,vmx-cr8-store-exit&lt;span class="o">=&lt;/span>on,vmx-flexpriority&lt;span class="o">=&lt;/span>on,vmx-vnmi-pending&lt;span class="o">=&lt;/span>on,vmx-movdr-exit&lt;span class="o">=&lt;/span>on,vmx-io-exit&lt;span class="o">=&lt;/span>on,vmx-io-bitmap&lt;span class="o">=&lt;/span>on,vmx-mtf&lt;span class="o">=&lt;/span>on,vmx-msr-bitmap&lt;span class="o">=&lt;/span>on,vmx-monitor-exit&lt;span class="o">=&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">on,vmx-pause-exit&lt;span class="o">=&lt;/span>on,vmx-secondary-ctls&lt;span class="o">=&lt;/span>on,vmx-exit-nosave-debugctl&lt;span class="o">=&lt;/span>on,vmx-exit-load-perf-global-ctrl&lt;span class="o">=&lt;/span>on,vmx-exit-ack-intr&lt;span class="o">=&lt;/span>on,vmx-exit-save-pat&lt;span class="o">=&lt;/span>on,vmx-exit-load-pat&lt;span class="o">=&lt;/span>on,vmx-
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">exit-save-efer&lt;span class="o">=&lt;/span>on,vmx-exit-load-efer&lt;span class="o">=&lt;/span>on,vmx-exit-save-preemption-timer&lt;span class="o">=&lt;/span>on,vmx-entry-noload-debugctl&lt;span class="o">=&lt;/span>on,vmx-entry-ia32e-mode&lt;span class="o">=&lt;/span>on,vmx-entry-load-perf-global-ctrl&lt;span class="o">=&lt;/span>on,vmx-entry-
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">load-pat&lt;span class="o">=&lt;/span>on,vmx-entry-load-efer&lt;span class="o">=&lt;/span>on,vmx-eptp-switching&lt;span class="o">=&lt;/span>on -m &lt;span class="nv">size&lt;/span>&lt;span class="o">=&lt;/span>63488k -object &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;qom-type&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;memory-backend-ram&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pc.ram&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;size&amp;#34;&lt;/span>:65011712&lt;span class="o">}&lt;/span> -overcommit mem-lock&lt;span class="o">=&lt;/span>off -sm
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">p 1,sockets&lt;span class="o">=&lt;/span>1,dies&lt;span class="o">=&lt;/span>1,clusters&lt;span class="o">=&lt;/span>1,cores&lt;span class="o">=&lt;/span>1,threads&lt;span class="o">=&lt;/span>&lt;span class="m">1&lt;/span> -object &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;qom-type&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;iothread&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;iothread1&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -uuid 5a9fc181-957e-5c32-9e5a-2de5e9673531 -smbios &lt;span class="nv">type&lt;/span>&lt;span class="o">=&lt;/span>1,manufacturer&lt;span class="o">=&lt;/span>Ku
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">beVirt,product&lt;span class="o">=&lt;/span>None,uuid&lt;span class="o">=&lt;/span>5a9fc181-957e-5c32-9e5a-2de5e9673531,family&lt;span class="o">=&lt;/span>KubeVirt -no-user-config -nodefaults -chardev socket,id&lt;span class="o">=&lt;/span>charmonitor,fd&lt;span class="o">=&lt;/span>20,server&lt;span class="o">=&lt;/span>on,wait&lt;span class="o">=&lt;/span>off -mon chard
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">ev&lt;/span>&lt;span class="o">=&lt;/span>charmonitor,id&lt;span class="o">=&lt;/span>monitor,mode&lt;span class="o">=&lt;/span>control -rtc &lt;span class="nv">base&lt;/span>&lt;span class="o">=&lt;/span>utc -no-shutdown -boot &lt;span class="nv">strict&lt;/span>&lt;span class="o">=&lt;/span>on -device &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pcie-root-port&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;port&amp;#34;&lt;/span>:16,&lt;span class="s2">&amp;#34;chassis&amp;#34;&lt;/span>:1,&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pci.1&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;bus&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pcie.0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;mult
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">ifunction&amp;#34;&lt;/span>:true,&lt;span class="s2">&amp;#34;addr&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;0x2&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -device &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pcie-root-port&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;port&amp;#34;&lt;/span>:17,&lt;span class="s2">&amp;#34;chassis&amp;#34;&lt;/span>:2,&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pci.2&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;bus&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pcie.0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;addr&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;0x2.0x1&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -device &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pcie-root-port&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;por
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">t&amp;#34;&lt;/span>:18,&lt;span class="s2">&amp;#34;chassis&amp;#34;&lt;/span>:3,&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pci.3&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;bus&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pcie.0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;addr&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;0x2.0x2&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -device &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pcie-root-port&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;port&amp;#34;&lt;/span>:19,&lt;span class="s2">&amp;#34;chassis&amp;#34;&lt;/span>:4,&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pci.4&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;bus&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pcie.0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;addr&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;0x2.0x3&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -devi
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">ce &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pcie-root-port&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;port&amp;#34;&lt;/span>:20,&lt;span class="s2">&amp;#34;chassis&amp;#34;&lt;/span>:5,&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pci.5&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;bus&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pcie.0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;addr&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;0x2.0x4&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -device &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pcie-root-port&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;port&amp;#34;&lt;/span>:21,&lt;span class="s2">&amp;#34;chassis&amp;#34;&lt;/span>:6,&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pci.6&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;bus
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pcie.0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;addr&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;0x2.0x5&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -device &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pcie-root-port&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;port&amp;#34;&lt;/span>:22,&lt;span class="s2">&amp;#34;chassis&amp;#34;&lt;/span>:7,&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pci.7&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;bus&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pcie.0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;addr&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;0x2.0x6&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -device &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pcie-root-port&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;port
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;&lt;/span>:23,&lt;span class="s2">&amp;#34;chassis&amp;#34;&lt;/span>:8,&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pci.8&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;bus&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pcie.0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;addr&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;0x2.0x7&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -device &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pcie-root-port&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;port&amp;#34;&lt;/span>:24,&lt;span class="s2">&amp;#34;chassis&amp;#34;&lt;/span>:9,&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pci.9&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;bus&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pcie.0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;multifunction&amp;#34;&lt;/span>:true,&lt;span class="s2">&amp;#34;ad
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">dr&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;0x3&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -device &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pcie-root-port&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;port&amp;#34;&lt;/span>:25,&lt;span class="s2">&amp;#34;chassis&amp;#34;&lt;/span>:10,&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pci.10&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;bus&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pcie.0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;addr&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;0x3.0x1&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -device &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;virtio-scsi-pci-non-transitional&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;id
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;scsi0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;bus&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pci.5&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;addr&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;0x0&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -device &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;virtio-serial-pci-non-transitional&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;virtio-serial0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;bus&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pci.6&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;addr&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;0x0&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -blockdev &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;file&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;f
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">ilename&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;/var/run/kubevirt/container-disks/disk_0.img&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;node-name&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;libvirt-3-storage&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;auto-read-only&amp;#34;&lt;/span>:true,&lt;span class="s2">&amp;#34;discard&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;unmap&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;cache&amp;#34;&lt;/span>:&lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;direct&amp;#34;&lt;/span>:true,&lt;span class="s2">&amp;#34;no-flush&amp;#34;&lt;/span>:false&lt;span class="o">}}&lt;/span> -b
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">lockdev &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;node-name&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;libvirt-3-format&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;read-only&amp;#34;&lt;/span>:true,&lt;span class="s2">&amp;#34;discard&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;unmap&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;cache&amp;#34;&lt;/span>:&lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;direct&amp;#34;&lt;/span>:true,&lt;span class="s2">&amp;#34;no-flush&amp;#34;&lt;/span>:false&lt;span class="o">}&lt;/span>,&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;qcow2&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;file&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;libvirt-3-storage&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -blockdev &lt;span class="o">{&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;file&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;filename&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;/var/run/kubevirt-ephemeral-disks/disk-data/containerdisk/disk.qcow2&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;node-name&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;libvirt-2-storage&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;auto-read-only&amp;#34;&lt;/span>:true,&lt;span class="s2">&amp;#34;discard&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;unmap&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;c
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">ache&amp;#34;&lt;/span>:&lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;direct&amp;#34;&lt;/span>:true,&lt;span class="s2">&amp;#34;no-flush&amp;#34;&lt;/span>:false&lt;span class="o">}}&lt;/span> -blockdev &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;node-name&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;libvirt-2-format&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;read-only&amp;#34;&lt;/span>:false,&lt;span class="s2">&amp;#34;discard&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;unmap&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;cache&amp;#34;&lt;/span>:&lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;direct&amp;#34;&lt;/span>:true,&lt;span class="s2">&amp;#34;no-flush&amp;#34;&lt;/span>:false&lt;span class="o">}&lt;/span>,&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;qco
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">w2&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;file&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;libvirt-2-storage&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;backing&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;libvirt-3-format&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -device &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;virtio-blk-pci-non-transitional&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;bus&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pci.7&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;addr&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;0x0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;drive&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;libvirt-2-format&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;ua-containerdisk&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;bootindex&amp;#34;&lt;/span>:1,&lt;span class="s2">&amp;#34;write-cache&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;on&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;werror&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;stop&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;rerror&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;stop&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -blockdev &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;file&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;filename&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;/var/run/kubevirt-ephemeral-disks/cloud-init-dat
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">a/default/testvm/noCloud.iso&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;node-name&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;libvirt-1-storage&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;read-only&amp;#34;&lt;/span>:false,&lt;span class="s2">&amp;#34;discard&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;unmap&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;cache&amp;#34;&lt;/span>:&lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;direct&amp;#34;&lt;/span>:true,&lt;span class="s2">&amp;#34;no-flush&amp;#34;&lt;/span>:false&lt;span class="o">}}&lt;/span> -device &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;virtio-blk-pc
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">i-non-transitional&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;bus&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pci.8&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;addr&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;0x0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;drive&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;libvirt-1-storage&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;ua-cloudinitdisk&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;write-cache&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;on&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;werror&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;stop&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;rerror&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;stop&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -netdev &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;type&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;tap&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">,&lt;span class="s2">&amp;#34;fd&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;21&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;vhost&amp;#34;&lt;/span>:true,&lt;span class="s2">&amp;#34;vhostfd&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;23&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;hostua-default&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -device &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;virtio-net-pci-non-transitional&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;host_mtu&amp;#34;&lt;/span>:1500,&lt;span class="s2">&amp;#34;netdev&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;hostua-default&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;ua-default
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;mac&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;f6:45:e5:7e:ae:be&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;bus&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pci.1&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;addr&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;0x0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;romfile&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -add-fd &lt;span class="nv">set&lt;/span>&lt;span class="o">=&lt;/span>0,fd&lt;span class="o">=&lt;/span>19,opaque&lt;span class="o">=&lt;/span>serial0-log -chardev socket,id&lt;span class="o">=&lt;/span>charserial0,fd&lt;span class="o">=&lt;/span>17,server&lt;span class="o">=&lt;/span>on,wait&lt;span class="o">=&lt;/span>off,logfile&lt;span class="o">=&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">/dev/fdset/0,logappend&lt;span class="o">=&lt;/span>on -device &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;isa-serial&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;chardev&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;charserial0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;serial0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;index&amp;#34;&lt;/span>:0&lt;span class="o">}&lt;/span> -chardev socket,id&lt;span class="o">=&lt;/span>charchannel0,fd&lt;span class="o">=&lt;/span>18,server&lt;span class="o">=&lt;/span>on,wait&lt;span class="o">=&lt;/span>off -device
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;virtserialport&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;bus&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;virtio-serial0.0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;nr&amp;#34;&lt;/span>:1,&lt;span class="s2">&amp;#34;chardev&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;charchannel0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;channel0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;name&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;org.qemu.guest_agent.0&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -audiodev &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;audio1&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;none
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="s2">&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -vnc &lt;span class="nv">vnc&lt;/span>&lt;span class="o">=&lt;/span>unix:/var/run/kubevirt-private/a726afe8-d14f-4930-8240-86b47a25b547/virt-vnc,audiodev&lt;span class="o">=&lt;/span>audio1 -device &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;VGA&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;video0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;vgamem_mb&amp;#34;&lt;/span>:16,&lt;span class="s2">&amp;#34;bus&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;pcie.0&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">,&lt;span class="s2">&amp;#34;addr&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;0x1&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -global ICH9-LPC.noreboot&lt;span class="o">=&lt;/span>off -watchdog-action reset -device &lt;span class="o">{&lt;/span>&lt;span class="s2">&amp;#34;driver&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;virtio-balloon-pci-non-transitional&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;id&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;balloon0&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;free-page-reporting&amp;#34;&lt;/span>:true,&lt;span class="s2">&amp;#34;bus&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">:&lt;span class="s2">&amp;#34;pci.9&amp;#34;&lt;/span>,&lt;span class="s2">&amp;#34;addr&amp;#34;&lt;/span>:&lt;span class="s2">&amp;#34;0x0&amp;#34;&lt;/span>&lt;span class="o">}&lt;/span> -sandbox on,obsolete&lt;span class="o">=&lt;/span>deny,elevateprivileges&lt;span class="o">=&lt;/span>deny,spawn&lt;span class="o">=&lt;/span>deny,resourcecontrol&lt;span class="o">=&lt;/span>deny -msg &lt;span class="nv">timestamp&lt;/span>&lt;span class="o">=&lt;/span>on
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">qemu &lt;span class="m">156&lt;/span> &lt;span class="m">0&lt;/span> &lt;span class="m">0&lt;/span> 14:06 pts/0 00:00:00 ps -ef
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Note: To get the full output of &lt;code>ps -ef&lt;/code> it is easier to &lt;code>kubectl exec -it ... -- /bin/bash&lt;/code> and then obtain the output with &lt;code>ps -ef | more&lt;/code>.&lt;/p>
+&lt;p>Let us elaborate on the above ouput in more detail.&lt;/p>
+&lt;p>We can see that the container is started with &lt;code>PID 1&lt;/code> from &lt;code>/usr/bin/virt-launcher-monitor&lt;/code> which creates another process via &lt;code>/usr/bin/virt-launcher&lt;/code>. The &lt;code>virt-launcher&lt;/code> created another process via the &lt;a class="link" href="https://libvirt.org/manpages/virtqemud.html" target="_blank" rel="noopener"
+>libvirt QEMU management daemon&lt;/a> &lt;code>/usr/sbin/virtqemud&lt;/code>.
+What we can also clearly see is why the &lt;code>libvirt&lt;/code> project exists as an abstraction layer. Starting the &lt;code>qemu-kvm&lt;/code> with &lt;code>PID 89&lt;/code> with all of the parameters would be a very tough challenge without the &lt;code>libvirt&lt;/code> layer in between.&lt;/p>
+&lt;p>If we want to look at the process tree more compactly, we can use &lt;code>pstree&lt;/code>:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">kubectl &lt;span class="nb">exec&lt;/span> -it &lt;span class="k">$(&lt;/span>kubectl get po -l&lt;span class="o">=&lt;/span>vm.kubevirt.io/name&lt;span class="o">=&lt;/span>testvm -o custom-columns&lt;span class="o">=&lt;/span>&lt;span class="s1">&amp;#39;:metadata.name&amp;#39;&lt;/span> --no-headers&lt;span class="k">)&lt;/span> -- pstree
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">virt-launcher-m-+-qemu-kvm---5*&lt;span class="o">[{&lt;/span>qemu-kvm&lt;span class="o">}]&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">|&lt;/span>-virt-launcher-+-virtlogd---&lt;span class="o">{&lt;/span>virtlogd&lt;span class="o">}&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">|&lt;/span> &lt;span class="p">|&lt;/span>-virtqemud---18*&lt;span class="o">[{&lt;/span>virtqemud&lt;span class="o">}]&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="p">|&lt;/span> &lt;span class="sb">`&lt;/span>-19*&lt;span class="o">[{&lt;/span>virt-launcher&lt;span class="o">}]&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="sb">`&lt;/span>-7*&lt;span class="o">[{&lt;/span>virt-launcher-m&lt;span class="o">}]&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>We can also leverage the &lt;code>libvirt&lt;/code> project so &lt;a class="link" href="https://kubevirt.io/user-guide/debug_virt_stack/virsh-commands/" target="_blank" rel="noopener"
+>see and understand the running VM&lt;/a>.&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ kubectl &lt;span class="nb">exec&lt;/span> -it &lt;span class="k">$(&lt;/span>kubectl get pod -l&lt;span class="o">=&lt;/span>vm.kubevirt.io/name&lt;span class="o">=&lt;/span>testvm -o custom-columns&lt;span class="o">=&lt;/span>&lt;span class="s1">&amp;#39;:metadata.name&amp;#39;&lt;/span> --no-headers&lt;span class="k">)&lt;/span> -- virsh list
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Authorization not available. Check &lt;span class="k">if&lt;/span> polkit service is running or see debug message &lt;span class="k">for&lt;/span> more information.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Id Name State
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">--------------------------------
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="m">1&lt;/span> default_testvm running
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ kubectl &lt;span class="nb">exec&lt;/span> -it &lt;span class="k">$(&lt;/span>kubectl get pod -l&lt;span class="o">=&lt;/span>vm.kubevirt.io/name&lt;span class="o">=&lt;/span>testvm -o custom-columns&lt;span class="o">=&lt;/span>&lt;span class="s1">&amp;#39;:metadata.name&amp;#39;&lt;/span> --no-headers&lt;span class="k">)&lt;/span> -- virsh dominfo default_testvm
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Authorization not available. Check &lt;span class="k">if&lt;/span> polkit service is running or see debug message &lt;span class="k">for&lt;/span> more information.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Id: &lt;span class="m">1&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Name: default_testvm
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">UUID: 5a9fc181-957e-5c32-9e5a-2de5e9673531
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">OS Type: hvm
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">State: running
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">CPU&lt;span class="o">(&lt;/span>s&lt;span class="o">)&lt;/span>: &lt;span class="m">1&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">CPU time: 23.1s
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Max memory: &lt;span class="m">63488&lt;/span> KiB
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Used memory: &lt;span class="m">62500&lt;/span> KiB
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Persistent: yes
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Autostart: disable
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Managed save: no
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Security model: none
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Security DOI: &lt;span class="m">0&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>In theory you could also manipulate the VM state with the &lt;code>virsh&lt;/code> commands, but this is not the real intention of the KubeVirt project. Nevertheless, we will do that for the sake of our understanding. With &lt;code>virsh destroy &amp;lt;DOMAIN&amp;gt;&lt;/code> we can forcefully stop a VM:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ kubectl &lt;span class="nb">exec&lt;/span> -it &lt;span class="k">$(&lt;/span>kubectl get pod -l&lt;span class="o">=&lt;/span>vm.kubevirt.io/name&lt;span class="o">=&lt;/span>testvm -o custom-columns&lt;span class="o">=&lt;/span>&lt;span class="s1">&amp;#39;:metadata.name&amp;#39;&lt;/span> --no-headers&lt;span class="k">)&lt;/span> -- virsh destroy default_testvm
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Authorization not available. Check &lt;span class="k">if&lt;/span> polkit service is running or see debug message &lt;span class="k">for&lt;/span> more information.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Domain &lt;span class="s1">&amp;#39;default_testvm&amp;#39;&lt;/span> destroyed
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ kubectl get pods -w
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">NAME READY STATUS RESTARTS AGE
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">virt-launcher-testvm-v5h4f 0/3 Init:0/2 &lt;span class="m">0&lt;/span> 0s
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">virt-launcher-testvm-v5h4f 0/3 Init:0/2 &lt;span class="m">0&lt;/span> 1s
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">virt-launcher-testvm-v5h4f 0/3 Init:1/2 &lt;span class="m">0&lt;/span> 2s
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">virt-launcher-testvm-v5h4f 0/3 PodInitializing &lt;span class="m">0&lt;/span> 9s
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">virt-launcher-testvm-v5h4f 3/3 Running &lt;span class="m">0&lt;/span> 20s
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">virt-launcher-testvm-v5h4f 3/3 Running &lt;span class="m">0&lt;/span> 20s
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>The &lt;code>VirtualMachine&lt;/code> will automatically be restarted because we have set the &lt;code>spec.runStrategy: Always&lt;/code> with our startup script.&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ kubectl get vm testvm -oyaml &lt;span class="p">|&lt;/span> yq -r &lt;span class="s1">&amp;#39;.spec.runStrategy&amp;#39;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Always
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>We can also access the &lt;code>VirtualMachine&lt;/code> with the &lt;code>virtctl console&lt;/code> command. Let&amp;rsquo;s create a file inside the VM:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ virtctl console testvm
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Successfully connected to testvm console. The escape sequence is ^&lt;span class="o">]&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">login as &lt;span class="s1">&amp;#39;cirros&amp;#39;&lt;/span> user. default password: &lt;span class="s1">&amp;#39;gocubsgo&amp;#39;&lt;/span>. use &lt;span class="s1">&amp;#39;sudo&amp;#39;&lt;/span> &lt;span class="k">for&lt;/span> root.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">testvm login: cirros
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Password:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ touch test.txt
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ uptime
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 15:46:49 up &lt;span class="m">28&lt;/span> min, &lt;span class="m">1&lt;/span> users, load average: 0.00, 0.00, 0.00
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ ls
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">test.txt
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Now let us migrate the VM to another &lt;code>node&lt;/code> and observe the &lt;code>virtualmachineinstancemigrations&lt;/code>:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ virtctl migrate testvm
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">VM testvm was scheduled to migrate
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ kubectl get virtualmachineinstancemigrations -w
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">NAME PHASE VMI
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kubevirt-migrate-vm-kbtgn Scheduling testvm
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kubevirt-migrate-vm-kbtgn Scheduled testvm
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kubevirt-migrate-vm-kbtgn PreparingTarget testvm
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kubevirt-migrate-vm-kbtgn TargetReady testvm
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kubevirt-migrate-vm-kbtgn Running testvm
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kubevirt-migrate-vm-kbtgn Succeeded testvm
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kubevirt-migrate-vm-kbtgn Succeeded testvm
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kubevirt-migrate-vm-kbtgn Succeeded testvm
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>The migration is completed, which we can also observe on the &lt;code>Pods&lt;/code>, as the &lt;code>virt-launcher-testvm-v5h4f&lt;/code> on node &lt;code>kind-worker&lt;/code> is gone and spawned another one on &lt;code>kind-worker2&lt;/code>. The &lt;code>VirtualMachine&lt;/code> is still running:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ kubectl get pods -owide
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">NAME READY STATUS RESTARTS AGE IP NODE NOMINATED NODE READINESS GATES
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">virt-launcher-testvm-9ggsf 3/3 Running &lt;span class="m">0&lt;/span> 41s 10.244.1.8 kind-worker2 &amp;lt;none&amp;gt; 1/1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">virt-launcher-testvm-v5h4f 0/3 Completed &lt;span class="m">0&lt;/span> 29m 10.244.2.20 kind-worker &amp;lt;none&amp;gt; 1/1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ virtctl console testvm
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Successfully connected to testvm console. The escape sequence is ^&lt;span class="o">]&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ ls
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">test.txt
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ uptime
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 15:48:10 up &lt;span class="m">29&lt;/span> min, &lt;span class="m">1&lt;/span> users, load average: 0.00, 0.00, 0.00
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>As pointed out earlier, a &lt;code>restart&lt;/code> of the VM will result in a loss of all data due to the &lt;code>containerDisk&lt;/code>:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ virtctl restart testvm
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">VM testvm was scheduled to restart
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ kubectl get pods -w
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">NAME READY STATUS RESTARTS AGE
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">virt-launcher-testvm-9ggsf 3/3 Terminating &lt;span class="m">0&lt;/span> 6m28s
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">virt-launcher-testvm-9ggsf 0/3 Completed &lt;span class="m">0&lt;/span> 6m29s
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">virt-launcher-testvm-4sn54 0/3 Pending &lt;span class="m">0&lt;/span> 0s
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">virt-launcher-testvm-4sn54 0/3 Init:0/2 &lt;span class="m">0&lt;/span> 0s
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">virt-launcher-testvm-4sn54 0/3 Init:1/2 &lt;span class="m">0&lt;/span> 2s
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">virt-launcher-testvm-4sn54 0/3 PodInitializing &lt;span class="m">0&lt;/span> 8s
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">virt-launcher-testvm-4sn54 3/3 Running &lt;span class="m">0&lt;/span> 21s
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ virtctl console testvmvm
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Successfully connected to testvm console. The escape sequence is ^&lt;span class="o">]&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">login as &lt;span class="s1">&amp;#39;cirros&amp;#39;&lt;/span> user. default password: &lt;span class="s1">&amp;#39;gocubsgo&amp;#39;&lt;/span>. use &lt;span class="s1">&amp;#39;sudo&amp;#39;&lt;/span> &lt;span class="k">for&lt;/span> root.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">testvm login: cirros
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Password:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ ls
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ uptime
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> 15:54:16 up &lt;span class="m">0&lt;/span> min, &lt;span class="m">1&lt;/span> users, load average: 0.00, 0.00, 0.00
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h3 id="experimenting-with-a-persistent-vm">Experimenting with a persistent VM
+&lt;/h3>&lt;p>Now let us take a look at a &lt;code>VirtualMachine&lt;/code> which is using a Read Write Once (RWO) persistent storage and a &lt;a class="link" href="https://ftp.uni-stuttgart.de/fedora/releases/41/Cloud/x86_64/images/" target="_blank" rel="noopener"
+>fedora 41 cloud image&lt;/a>. This &lt;code>VirtualMachine&lt;/code> is relying on the Containerized Data Importer (CDI) installed with &lt;a class="link" href="#provision-kind-cluster-with-kubevirt" >the previous bash script&lt;/a>. The CDI will import the cloud image into a &lt;code>DataVolume&lt;/code> which is an abstraction on top of a Persistent Volume Claim (PVC).&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;span class="lnt">28
+&lt;/span>&lt;span class="lnt">29
+&lt;/span>&lt;span class="lnt">30
+&lt;/span>&lt;span class="lnt">31
+&lt;/span>&lt;span class="lnt">32
+&lt;/span>&lt;span class="lnt">33
+&lt;/span>&lt;span class="lnt">34
+&lt;/span>&lt;span class="lnt">35
+&lt;/span>&lt;span class="lnt">36
+&lt;/span>&lt;span class="lnt">37
+&lt;/span>&lt;span class="lnt">38
+&lt;/span>&lt;span class="lnt">39
+&lt;/span>&lt;span class="lnt">40
+&lt;/span>&lt;span class="lnt">41
+&lt;/span>&lt;span class="lnt">42
+&lt;/span>&lt;span class="lnt">43
+&lt;/span>&lt;span class="lnt">44
+&lt;/span>&lt;span class="lnt">45
+&lt;/span>&lt;span class="lnt">46
+&lt;/span>&lt;span class="lnt">47
+&lt;/span>&lt;span class="lnt">48
+&lt;/span>&lt;span class="lnt">49
+&lt;/span>&lt;span class="lnt">50
+&lt;/span>&lt;span class="lnt">51
+&lt;/span>&lt;span class="lnt">52
+&lt;/span>&lt;span class="lnt">53
+&lt;/span>&lt;span class="lnt">54
+&lt;/span>&lt;span class="lnt">55
+&lt;/span>&lt;span class="lnt">56
+&lt;/span>&lt;span class="lnt">57
+&lt;/span>&lt;span class="lnt">58
+&lt;/span>&lt;span class="lnt">59
+&lt;/span>&lt;span class="lnt">60
+&lt;/span>&lt;span class="lnt">61
+&lt;/span>&lt;span class="lnt">62
+&lt;/span>&lt;span class="lnt">63
+&lt;/span>&lt;span class="lnt">64
+&lt;/span>&lt;span class="lnt">65
+&lt;/span>&lt;span class="lnt">66
+&lt;/span>&lt;span class="lnt">67
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="line">&lt;span class="cl">&lt;span class="nt">apiVersion&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">kubevirt.io/v1&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="nt">kind&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">VirtualMachine&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="nt">metadata&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">labels&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">kubevirt.io/vm&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">fedora-vm&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">name&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">fedora-vm&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w">&lt;/span>&lt;span class="nt">spec&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">dataVolumeTemplates&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>- &lt;span class="nt">metadata&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">creationTimestamp&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="kc">null&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">name&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">src-dv&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">spec&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">storage&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">accessModes&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>- &lt;span class="l">ReadWriteOnce&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">volumeMode&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">Filesystem&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">resources&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">requests&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">storage&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">10Gi&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">storageClassName&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">standard &lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">source&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">http&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">url&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">https://download.fedoraproject.org/pub/fedora/linux/releases/41/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-41-1.4.x86_64.qcow2 &lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">runStrategy&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">Always&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">template&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">metadata&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">labels&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">kubevirt.io/vm&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">fedora-vm&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">spec&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">domain&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">cpu&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">sockets&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="m">1&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">cores&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="m">1&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">threads&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="m">1&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">devices&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">disks&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>- &lt;span class="nt">disk&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">bus&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">virtio&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">name&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">datavolumedisk1&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">interfaces&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>- &lt;span class="nt">masquerade&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>{}&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">name&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">default&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">resources&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">requests&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">memory&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">2Gi&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">terminationGracePeriodSeconds&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="m">0&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">volumes&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>- &lt;span class="nt">dataVolume&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">name&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">src-dv&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">name&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">datavolumedisk1&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>- &lt;span class="nt">cloudInitNoCloud&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">userData&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">|-&lt;/span>&lt;span class="sd">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="sd"> #cloud-config
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="sd"> user: fedora
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="sd"> password: fedora
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="sd"> chpasswd: { expire: False }
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="sd"> runcmd:
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="sd"> - sudo dnf update
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="sd"> - sudo dnf install httpd -y
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="sd"> - sudo sed -iE &amp;#39;s/Listen 80/Listen 8080/&amp;#39; /etc/httpd/conf/httpd.conf
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="sd"> - sudo systemctl enable httpd.service
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="sd"> - sudo systemctl start httpd.service
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="sd"> - echo &amp;#39;This is demo VM 1 :)&amp;#39; &amp;gt; /var/www/html/index.html&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">name&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">cloudinitdisk&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">networks&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>- &lt;span class="nt">name&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">default&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="w"> &lt;/span>&lt;span class="nt">pod&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>{}&lt;span class="w">
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>This VM has dedicated cpu resources in &lt;code>.spec.template.spec.domain.cpu&lt;/code> which are actually the default values. Additionally we are installing &lt;code>httpd&lt;/code>, operate it on port &lt;code>8080&lt;/code> and write our custom &lt;code>index.html&lt;/code> file via the &lt;code>cloud-init&lt;/code>.&lt;/p>
+&lt;p>Let&amp;rsquo;s create the VM and expose a &lt;code>NodePort&lt;/code> service:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ kubectl apply -f fedora-vm.yaml
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ virtctl expose vmi fedora-vm --name&lt;span class="o">=&lt;/span>fedora-http --port&lt;span class="o">=&lt;/span>&lt;span class="m">8080&lt;/span> --type&lt;span class="o">=&lt;/span>NodePort
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ kubectl get svc
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">NAME TYPE CLUSTER-IP EXTERNAL-IP PORT&lt;span class="o">(&lt;/span>S&lt;span class="o">)&lt;/span> AGE
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">fedora-http NodePort 10.96.225.134 &amp;lt;none&amp;gt; 8080:31538/TCP 22h
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>We can also reach it with &lt;code>curl&lt;/code>:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ curl &lt;span class="k">$(&lt;/span>kubectl get node kind-worker -ojson &lt;span class="p">|&lt;/span> jq -r &lt;span class="s1">&amp;#39;.status.addresses[0].address&amp;#39;&lt;/span>&lt;span class="k">)&lt;/span>:&lt;span class="k">$(&lt;/span>kubectl get svc fedora-http -ojson &lt;span class="p">|&lt;/span> jq -r &lt;span class="s1">&amp;#39;.spec.ports[0].nodePort&amp;#39;&lt;/span>&lt;span class="k">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">This is demo VM &lt;span class="m">1&lt;/span> :&lt;span class="o">)&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>This &lt;code>VirtualMachine&lt;/code> is now utilizing a persistent storage via &lt;code>DataVolume&lt;/code> and &lt;code>PVC&lt;/code>:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ kubectl get pvc
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">NAME STATUS VOLUME CAPACITY ACCESS MODES STORAGECLASS VOLUMEATTRIBUTESCLASS AGE
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">src-dv Bound pvc-66eec301-9ec0-48c9-988f-f3383dbdf2ec &lt;span class="m">11362347344&lt;/span> RWO standard &amp;lt;unset&amp;gt; 2m37s
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ kubectl get dv
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">NAME PHASE PROGRESS RESTARTS AGE
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">src-dv Succeeded 100.0% 2m41s
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Note: The &lt;code>PVC&lt;/code> is &lt;code>RWO&lt;/code>, which does not allow us to live migrate the VM between hosts. Thus we had explored the live migration with the &lt;a class="link" href="#experimenting-with-the-containerdisk-vm" >containerDisk VM in the previous section&lt;/a>.&lt;/p>
+&lt;p>We will test the persistency of the storage:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;span class="lnt">17
+&lt;/span>&lt;span class="lnt">18
+&lt;/span>&lt;span class="lnt">19
+&lt;/span>&lt;span class="lnt">20
+&lt;/span>&lt;span class="lnt">21
+&lt;/span>&lt;span class="lnt">22
+&lt;/span>&lt;span class="lnt">23
+&lt;/span>&lt;span class="lnt">24
+&lt;/span>&lt;span class="lnt">25
+&lt;/span>&lt;span class="lnt">26
+&lt;/span>&lt;span class="lnt">27
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="line">&lt;span class="cl">$ virtctl console fedora-vm
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Successfully connected to fedora-vm console. The escape sequence is ^&lt;span class="o">]&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">fedora-vm login: fedora
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Password:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">[&lt;/span>fedora@fedora-vm ~&lt;span class="o">]&lt;/span>$ ls
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">[&lt;/span>fedora@fedora-vm ~&lt;span class="o">]&lt;/span>$ touch test.txt
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">[&lt;/span>fedora@fedora-vm ~&lt;span class="o">]&lt;/span>$ &lt;span class="nb">exit&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ virtctl restart fedora-vm
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">VM fedora-vm was scheduled to restart
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ kubectl get pods -w
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">NAME READY STATUS RESTARTS AGE
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">virt-launcher-fedora-vm-4gtvx 0/2 ContainerCreating &lt;span class="m">0&lt;/span> 2s
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">virt-launcher-testvm-4sn54 3/3 Running &lt;span class="m">0&lt;/span> 27m
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">virt-launcher-fedora-vm-4gtvx 2/2 Running &lt;span class="m">0&lt;/span> 4s
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ virtctl console fedora-vm
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Successfully connected to fedora-vm console. The escape sequence is ^&lt;span class="o">]&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">fedora-vm login: fedora
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Password:
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Last login: Mon Feb &lt;span class="m">17&lt;/span> 16:22:18 on ttyS0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="o">[&lt;/span>fedora@fedora-vm ~&lt;span class="o">]&lt;/span>$ ls
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">test.txt
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div></description></item></channel></rss>

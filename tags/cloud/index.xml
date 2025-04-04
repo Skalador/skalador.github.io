@@ -1,0 +1,380 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Cloud on Kevin Niederwanger</title><link>https://www.niederwanger.dev/tags/cloud/</link><description>Recent content in Cloud on Kevin Niederwanger</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Fri, 04 Apr 2025 00:00:00 +0000</lastBuildDate><atom:link href="https://www.niederwanger.dev/tags/cloud/index.xml" rel="self" type="application/rss+xml"/><item><title>Who rebooted my VM? A cloud mystery</title><link>https://www.niederwanger.dev/p/who-rebooted-my-vm/</link><pubDate>Fri, 04 Apr 2025 00:00:00 +0000</pubDate><guid>https://www.niederwanger.dev/p/who-rebooted-my-vm/</guid><description>&lt;img src="https://www.niederwanger.dev/p/who-rebooted-my-vm/cover.png" alt="Featured image of post Who rebooted my VM? A cloud mystery" />&lt;h2 id="who-rebooted-my-vm-a-cloud-mystery">Who rebooted my VM? A cloud mystery
+&lt;/h2>&lt;p>I had been recently involved in an interesting discussion on how to figure out, who has rebooted your virtual machine from a linux perspective. In this particular case, we were talking about an OpenShift &lt;code>node&lt;/code>. I will be elaborating on a few different cases and how those can be investigated.&lt;/p>
+&lt;p>To reproduce the problem, I am using a five node OpenShift cluster which is running on a &lt;code>Kernel Based Virtual Machine (KVM)&lt;/code> host.&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;span class="lnt">15
+&lt;/span>&lt;span class="lnt">16
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">$ oc get nodes
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">NAME STATUS ROLES AGE VERSION
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">compute-0 Ready worker 3d23h v1.31.6
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">compute-1 Ready worker 3d23h v1.31.6
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">master-0 Ready control-plane,master,worker 3d23h v1.31.6
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">master-1 Ready control-plane,master,worker 3d23h v1.31.6
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">master-2 Ready control-plane,master,worker 3d23h v1.31.6
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ virsh list
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> Id Name State
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">--------------------------------
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="m">2&lt;/span> ocp4-master-0 running
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="m">3&lt;/span> ocp4-master-1 running
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="m">4&lt;/span> ocp4-master-2 running
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="m">5&lt;/span> ocp4-compute-0 running
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="m">6&lt;/span> ocp4-compute-1 running
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Consequently, I am my own hypervisor admin which will be sabotaging my OpenShift cluster for this investigation.&lt;/p>
+&lt;p>What all cases will have in common is that a node will be &lt;code>NotReady&lt;/code> for some time, e.g.:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">$ oc get nodes
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">NAME STATUS ROLES AGE VERSION
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">compute-0 Ready worker 4d15h v1.31.6
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">compute-1 NotReady worker 4d15h v1.31.6
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">master-0 Ready control-plane,master,worker 4d15h v1.31.6
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">master-1 Ready control-plane,master,worker 4d15h v1.31.6
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">master-2 Ready control-plane,master,worker 4d15h v1.31.6
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Additionally you will be able to find logs of the machine config controller which reports a &lt;code>NotReady&lt;/code> machine:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;span class="lnt">8
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">$ oc -n openshift-machine-config-operator logs machine-config-controller-5f88fbbc4f-rqjm4 -c machine-config-controller &lt;span class="p">|&lt;/span> grep -i compute-1
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">I0404 06:41:13.153952 &lt;span class="m">1&lt;/span> node_controller.go:584&lt;span class="o">]&lt;/span> Pool worker: node compute-1: Reporting unready: node compute-1 is reporting &lt;span class="nv">OutOfDisk&lt;/span>&lt;span class="o">=&lt;/span>Unknown
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">I0404 06:41:13.196590 &lt;span class="m">1&lt;/span> node_controller.go:584&lt;span class="o">]&lt;/span> Pool worker: node compute-1: changed taints
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">I0404 06:41:19.481728 &lt;span class="m">1&lt;/span> node_controller.go:584&lt;span class="o">]&lt;/span> Pool worker: node compute-1: changed taints
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">I0404 06:42:42.730148 &lt;span class="m">1&lt;/span> node_controller.go:584&lt;span class="o">]&lt;/span> Pool worker: node compute-1: Reporting unready: node compute-1 is reporting &lt;span class="nv">NotReady&lt;/span>&lt;span class="o">=&lt;/span>False
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">I0404 06:42:56.309260 &lt;span class="m">1&lt;/span> node_controller.go:584&lt;span class="o">]&lt;/span> Pool worker: node compute-1: Reporting ready
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h2 id="case-1-user-reboot">Case 1: User reboot
+&lt;/h2>&lt;p>In this case a user has rebooted one of your nodes (either via a &lt;code>debug&lt;/code> container or via &lt;code>ssh&lt;/code>). This can be easily found with the audit logs:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">$ cat /var/log/audit/audit.log &lt;span class="p">|&lt;/span> grep reboot
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">type&lt;/span>&lt;span class="o">=&lt;/span>USER_CMD &lt;span class="nv">msg&lt;/span>&lt;span class="o">=&lt;/span>audit&lt;span class="o">(&lt;/span>1743748835.979:805&lt;span class="o">)&lt;/span>: &lt;span class="nv">pid&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">1366614&lt;/span> &lt;span class="nv">uid&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">0&lt;/span> &lt;span class="nv">auid&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">4294967295&lt;/span> &lt;span class="nv">ses&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">4294967295&lt;/span> &lt;span class="nv">subj&lt;/span>&lt;span class="o">=&lt;/span>system_u:system_r:spc_t:s0 &lt;span class="nv">msg&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s1">&amp;#39;cwd=&amp;#34;/&amp;#34; cmd=&amp;#34;reboot&amp;#34; exe=&amp;#34;/usr/bin/sudo&amp;#34; terminal=? res=success&amp;#39;&lt;/span>&lt;span class="nv">UID&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;root&amp;#34;&lt;/span> &lt;span class="nv">AUID&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;unset&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h2 id="case-2-machine-config-rollout">Case 2: Machine Config rollout
+&lt;/h2>&lt;p>A machine config rollout can also be found in the &lt;code>audit.log&lt;/code> files:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">$ cat /var/log/audit/audit.log &lt;span class="p">|&lt;/span> grep reboot
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">type&lt;/span>&lt;span class="o">=&lt;/span>SERVICE_START &lt;span class="nv">msg&lt;/span>&lt;span class="o">=&lt;/span>audit&lt;span class="o">(&lt;/span>1743789169.017:1277&lt;span class="o">)&lt;/span>: &lt;span class="nv">pid&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">1&lt;/span> &lt;span class="nv">uid&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">0&lt;/span> &lt;span class="nv">auid&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">4294967295&lt;/span> &lt;span class="nv">ses&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">4294967295&lt;/span> &lt;span class="nv">subj&lt;/span>&lt;span class="o">=&lt;/span>system_u:system_r:init_t:s0 &lt;span class="nv">msg&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s1">&amp;#39;unit=machine-config-daemon-reboot comm=&amp;#34;systemd&amp;#34; exe=&amp;#34;/usr/lib/systemd/systemd&amp;#34; hostname=? addr=? terminal=? res=success&amp;#39;&lt;/span>^&lt;span class="o">]&lt;/span>&lt;span class="nv">UID&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;root&amp;#34;&lt;/span> &lt;span class="nv">AUID&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;unset&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">type&lt;/span>&lt;span class="o">=&lt;/span>SERVICE_STOP &lt;span class="nv">msg&lt;/span>&lt;span class="o">=&lt;/span>audit&lt;span class="o">(&lt;/span>1743789169.119:1278&lt;span class="o">)&lt;/span>: &lt;span class="nv">pid&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">1&lt;/span> &lt;span class="nv">uid&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">0&lt;/span> &lt;span class="nv">auid&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">4294967295&lt;/span> &lt;span class="nv">ses&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">4294967295&lt;/span> &lt;span class="nv">subj&lt;/span>&lt;span class="o">=&lt;/span>system_u:system_r:init_t:s0 &lt;span class="nv">msg&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s1">&amp;#39;unit=machine-config-daemon-reboot comm=&amp;#34;systemd&amp;#34; exe=&amp;#34;/usr/lib/systemd/systemd&amp;#34; hostname=? addr=? terminal=? res=success&amp;#39;&lt;/span>^&lt;span class="o">]&lt;/span>&lt;span class="nv">UID&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;root&amp;#34;&lt;/span> &lt;span class="nv">AUID&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;unset
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Furthermore this can be confirmed with the &lt;code>MachineConfigPool&lt;/code>, which provides us with the latest &lt;code>MachineConfig&lt;/code> &lt;code>rendered-worker-04636f9acf052beffabf57725a564095&lt;/code>&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">$ oc get mcp worker
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">NAME CONFIG UPDATED UPDATING DEGRADED MACHINECOUNT READYMACHINECOUNT UPDATEDMACHINECOUNT DEGRADEDMACHINECOUNT AGE
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">worker rendered-worker-04636f9acf052beffabf57725a564095 True False False &lt;span class="m">2&lt;/span> &lt;span class="m">2&lt;/span> &lt;span class="m">2&lt;/span> &lt;span class="m">0&lt;/span> 5d2h
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Looking at the boot IDs, we should see, that boot id &lt;code>57cdb3ac10fd46c3933a3f0ba3e3c33f&lt;/code> should be shutdown by the machine config operator with a message, that it will boot into &lt;code>rendered-worker-04636f9acf052beffabf57725a564095&lt;/code>. This is the case:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">$ journalctl --list-boots &lt;span class="p">|&lt;/span> tail -n &lt;span class="m">2&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> -1 57cdb3ac10fd46c3933a3f0ba3e3c33f Fri 2025-04-04 07:47:43 UTC Fri 2025-04-04 17:53:13 UTC
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl"> &lt;span class="m">0&lt;/span> 6004e8be8fbc4d769485a991ff1641d4 Fri 2025-04-04 17:53:19 UTC Fri 2025-04-04 18:04:01 UTC
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">$ journalctl -u machine-config-daemon-reboot
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">-- Boot 57cdb3ac10fd46c3933a3f0ba3e3c33f --
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Apr &lt;span class="m">04&lt;/span> 17:52:49 compute-1 systemd&lt;span class="o">[&lt;/span>1&lt;span class="o">]&lt;/span>: Started machine-config-daemon: Node will reboot into config rendered-worker-04636f9acf052beffabf57725a564095.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Apr &lt;span class="m">04&lt;/span> 17:52:49 compute-1 systemd&lt;span class="o">[&lt;/span>1&lt;span class="o">]&lt;/span>: machine-config-daemon-reboot.service: Deactivated successfully.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Apr &lt;span class="m">04&lt;/span> 17:52:49 compute-1 systemd&lt;span class="o">[&lt;/span>1&lt;span class="o">]&lt;/span>: Stopped machine-config-daemon: Node will reboot into config rendered-worker-04636f9acf052beffabf57725a564095.
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;h2 id="case-3-a-container-with-elevated-privileges-was-compromised">Case 3: A container with elevated privileges was compromised
+&lt;/h2>&lt;p>Some containers require elevated privileges to perform certain actions on OpenShift. If such a container is compromised, then a reboot could be initiated from the container. In this example I will be using a container of the &lt;code>Node Tuning Operator&lt;/code>:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt"> 1
+&lt;/span>&lt;span class="lnt"> 2
+&lt;/span>&lt;span class="lnt"> 3
+&lt;/span>&lt;span class="lnt"> 4
+&lt;/span>&lt;span class="lnt"> 5
+&lt;/span>&lt;span class="lnt"> 6
+&lt;/span>&lt;span class="lnt"> 7
+&lt;/span>&lt;span class="lnt"> 8
+&lt;/span>&lt;span class="lnt"> 9
+&lt;/span>&lt;span class="lnt">10
+&lt;/span>&lt;span class="lnt">11
+&lt;/span>&lt;span class="lnt">12
+&lt;/span>&lt;span class="lnt">13
+&lt;/span>&lt;span class="lnt">14
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">$ oc -n openshift-cluster-node-tuning-operator get pods -owide
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">NAME READY STATUS RESTARTS AGE IP NODE NOMINATED NODE READINESS GATES
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">cluster-node-tuning-operator-5bb647f57c-lk7wx 1/1 Running &lt;span class="m">0&lt;/span> 4d15h X.X.X.X master-1 &amp;lt;none&amp;gt; &amp;lt;none&amp;gt;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">tuned-5q7vm 1/1 Running &lt;span class="m">1&lt;/span> 4d15h X.X.X.X compute-0 &amp;lt;none&amp;gt; &amp;lt;none&amp;gt;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">tuned-8n89v 1/1 Running &lt;span class="m">1&lt;/span> 4d15h X.X.X.X compute-1 &amp;lt;none&amp;gt; &amp;lt;none&amp;gt;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">tuned-g7nwk 1/1 Running &lt;span class="m">0&lt;/span> 4d15h X.X.X.X master-0 &amp;lt;none&amp;gt; &amp;lt;none&amp;gt;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">tuned-rxt2q 1/1 Running &lt;span class="m">0&lt;/span> 4d15h X.X.X.X master-2 &amp;lt;none&amp;gt; &amp;lt;none&amp;gt;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">tuned-xsm98 1/1 Running &lt;span class="m">0&lt;/span> 4d15h X.X.X.X master-1 &amp;lt;none&amp;gt; &amp;lt;none&amp;gt;
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ oc -n openshift-cluster-node-tuning-operator rsh tuned-8n89v
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ id
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">uid&lt;/span>&lt;span class="o">=&lt;/span>0&lt;span class="o">(&lt;/span>root&lt;span class="o">)&lt;/span> &lt;span class="nv">gid&lt;/span>&lt;span class="o">=&lt;/span>0&lt;span class="o">(&lt;/span>root&lt;span class="o">)&lt;/span> &lt;span class="nv">groups&lt;/span>&lt;span class="o">=&lt;/span>0&lt;span class="o">(&lt;/span>root&lt;span class="o">)&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ date
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Fri Apr &lt;span class="m">4&lt;/span> 07:25:01 UTC &lt;span class="m">2025&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ reboot
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>One interesting fact here is, that we do not see this reboot in the &lt;code>audit.log&lt;/code>, as the last entry for a &lt;code>reboot&lt;/code> is the same as the one from &lt;code>Case 1&lt;/code>:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">$ cat /var/log/audit/audit.log &lt;span class="p">|&lt;/span> grep reboot &lt;span class="p">|&lt;/span> tail -n &lt;span class="m">1&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">type&lt;/span>&lt;span class="o">=&lt;/span>USER_CMD &lt;span class="nv">msg&lt;/span>&lt;span class="o">=&lt;/span>audit&lt;span class="o">(&lt;/span>1743748835.979:805&lt;span class="o">)&lt;/span>: &lt;span class="nv">pid&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">1366614&lt;/span> &lt;span class="nv">uid&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">0&lt;/span> &lt;span class="nv">auid&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">4294967295&lt;/span> &lt;span class="nv">ses&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">4294967295&lt;/span> &lt;span class="nv">subj&lt;/span>&lt;span class="o">=&lt;/span>system_u:system_r:spc_t:s0 &lt;span class="nv">msg&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s1">&amp;#39;cwd=&amp;#34;/&amp;#34; cmd=&amp;#34;reboot&amp;#34; exe=&amp;#34;/usr/bin/sudo&amp;#34; terminal=? res=success&amp;#39;&lt;/span>&lt;span class="nv">UID&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;root&amp;#34;&lt;/span> &lt;span class="nv">AUID&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;unset&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Nevertheless, we can see in the &lt;code>journalctl&lt;/code> that the &lt;code>reboot&lt;/code> was initiated. Please also note, that the reboot was initiated shortly after &lt;code>Fri Apr 4 07:25:01 UTC 2025&lt;/code>:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">$ journalctl -b -1 &lt;span class="p">|&lt;/span> grep -i reboot &lt;span class="p">|&lt;/span> tail -n &lt;span class="m">3&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Apr &lt;span class="m">04&lt;/span> 07:25:06 compute-1 systemd-logind&lt;span class="o">[&lt;/span>906&lt;span class="o">]&lt;/span>: The system will reboot now!
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Apr &lt;span class="m">04&lt;/span> 07:25:06 compute-1 systemd-logind&lt;span class="o">[&lt;/span>906&lt;span class="o">]&lt;/span>: System is rebooting.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Apr &lt;span class="m">04&lt;/span> 07:26:41 compute-1 systemd&lt;span class="o">[&lt;/span>1&lt;span class="o">]&lt;/span>: Requested transaction contradicts existing jobs: Transaction &lt;span class="k">for&lt;/span> NetworkManager-dispatcher.service/start is destructive &lt;span class="o">(&lt;/span>reboot.target has &lt;span class="s1">&amp;#39;start&amp;#39;&lt;/span> job queued, but &lt;span class="s1">&amp;#39;stop&amp;#39;&lt;/span> is included in transaction&lt;span class="o">)&lt;/span>.
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>While an audit rule might be helping to detect that the &lt;code>reboot&lt;/code> was started via &lt;code>/usr/sbin/reboot&lt;/code> from a container, this is probably not something of practical relevance.&lt;/p>
+&lt;h2 id="case-4-the-hypervisor-triggered-a-soft-reboot">Case 4: The hypervisor triggered a soft reboot
+&lt;/h2>&lt;p>To differentiate better between those cases, we will be using &lt;code>compute-0&lt;/code> for the reboots initiated by the hypervisor / cloud provider instead of &lt;code>compute-1&lt;/code>.
+For a (kind of) graceful shutdown we will be using the &lt;code>virsh reboot&lt;/code> command. To provide a rough idea what this does, we can take a look at the man page for &lt;code>virsh reboot&lt;/code>:&lt;/p>
+&lt;blockquote>
+&lt;p>Reboot a domain. This acts just as if the domain had the reboot command run from the console. The command returns as soon as it has executed the reboot action, which may be significantly before the domain actually reboots.&lt;/p>&lt;/blockquote>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">$ date
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Fri Apr &lt;span class="m">4&lt;/span> 06:59:52 PM CEST &lt;span class="m">2025&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ virsh reboot ocp4-compute-0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Domain &lt;span class="s1">&amp;#39;ocp4-compute-0&amp;#39;&lt;/span> is being rebooted
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>We can find a related &lt;code>audit.log&lt;/code>:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">$ ausearch -m SERVICE_STOP &lt;span class="p">|&lt;/span> grep -Ei &lt;span class="s1">&amp;#39;shutdownd|shutdown|reboot|final|auditd&amp;#39;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">type&lt;/span>&lt;span class="o">=&lt;/span>SERVICE_STOP &lt;span class="nv">msg&lt;/span>&lt;span class="o">=&lt;/span>audit&lt;span class="o">(&lt;/span>1743785996.839:279&lt;span class="o">)&lt;/span>: &lt;span class="nv">pid&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">1&lt;/span> &lt;span class="nv">uid&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">0&lt;/span> &lt;span class="nv">auid&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">4294967295&lt;/span> &lt;span class="nv">ses&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">4294967295&lt;/span> &lt;span class="nv">subj&lt;/span>&lt;span class="o">=&lt;/span>system_u:system_r:init_t:s0 &lt;span class="nv">msg&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s1">&amp;#39;unit=dracut-shutdown comm=&amp;#34;systemd&amp;#34; exe=&amp;#34;/usr/lib/systemd/systemd&amp;#34; hostname=? addr=? terminal=? res=success&amp;#39;&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Additionally we see the shutdown process in the &lt;code>journalctl&lt;/code> of the previous boot:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">$ journalctl -b -1 &lt;span class="p">|&lt;/span> grep -i shutdown &lt;span class="p">|&lt;/span> tail -n &lt;span class="m">6&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Apr &lt;span class="m">04&lt;/span> 16:59:56 compute-0 systemd&lt;span class="o">[&lt;/span>1&lt;span class="o">]&lt;/span>: Stopping Restore /run/initramfs on shutdown...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Apr &lt;span class="m">04&lt;/span> 16:59:56 compute-0 systemd&lt;span class="o">[&lt;/span>1&lt;span class="o">]&lt;/span>: dracut-shutdown.service: Deactivated successfully.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Apr &lt;span class="m">04&lt;/span> 16:59:56 compute-0 systemd&lt;span class="o">[&lt;/span>1&lt;span class="o">]&lt;/span>: Stopped Restore /run/initramfs on shutdown.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Apr &lt;span class="m">04&lt;/span> 17:00:42 compute-0 systemd&lt;span class="o">[&lt;/span>1&lt;span class="o">]&lt;/span>: Requested transaction contradicts existing jobs: Transaction &lt;span class="k">for&lt;/span> NetworkManager-dispatcher.service/start is destructive &lt;span class="o">(&lt;/span>shutdown.target has &lt;span class="s1">&amp;#39;start&amp;#39;&lt;/span> job queued, but &lt;span class="s1">&amp;#39;stop&amp;#39;&lt;/span> is included in transaction&lt;span class="o">)&lt;/span>.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Apr &lt;span class="m">04&lt;/span> 17:00:43 compute-0 systemd&lt;span class="o">[&lt;/span>1&lt;span class="o">]&lt;/span>: Stopping Record System Boot/Shutdown in UTMP...
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Apr &lt;span class="m">04&lt;/span> 17:00:43 compute-0 systemd&lt;span class="o">[&lt;/span>1&lt;span class="o">]&lt;/span>: Stopped Record System Boot/Shutdown in UTMP.
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Note: While the timezone configuration is different, those logs are related to the same &lt;code>virsh reboot&lt;/code>.&lt;/p>
+&lt;h2 id="case-5-the-hypervisor-triggered-a-hard-reset">Case 5: The hypervisor triggered a hard reset
+&lt;/h2>&lt;p>For this experiment we will be using the &lt;code>virsh reset&lt;/code> command. To provide a rough idea what this does, we can take a look at the man page for &lt;code>virsh reset&lt;/code>:&lt;/p>
+&lt;blockquote>
+&lt;p>Reset a domain immediately without any guest shutdown. reset emulates the power reset button on a machine, where all guest hardware sees the RST line set and reinitializes internal state.
+Note: Reset without any guest OS shutdown risks data loss.&lt;/p>&lt;/blockquote>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">$ date
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Fri Apr &lt;span class="m">4&lt;/span> 07:17:45 PM CEST &lt;span class="m">2025&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">$ virsh reset ocp4-compute-0
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Domain &lt;span class="s1">&amp;#39;ocp4-compute-0&amp;#39;&lt;/span> was reset
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>The only &lt;code>audit.log&lt;/code> we can find, is the one form before:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">$ ausearch -m SERVICE_STOP &lt;span class="p">|&lt;/span> grep -Ei &lt;span class="s1">&amp;#39;shutdownd|shutdown|reboot|final|auditd&amp;#39;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">&lt;span class="nv">type&lt;/span>&lt;span class="o">=&lt;/span>SERVICE_STOP &lt;span class="nv">msg&lt;/span>&lt;span class="o">=&lt;/span>audit&lt;span class="o">(&lt;/span>1743785996.839:279&lt;span class="o">)&lt;/span>: &lt;span class="nv">pid&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">1&lt;/span> &lt;span class="nv">uid&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">0&lt;/span> &lt;span class="nv">auid&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">4294967295&lt;/span> &lt;span class="nv">ses&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">4294967295&lt;/span> &lt;span class="nv">subj&lt;/span>&lt;span class="o">=&lt;/span>system_u:system_r:init_t:s0 &lt;span class="nv">msg&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s1">&amp;#39;unit=dracut-shutdown comm=&amp;#34;systemd&amp;#34; exe=&amp;#34;/usr/lib/systemd/systemd&amp;#34; hostname=? addr=? terminal=? res=success&amp;#39;&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>The &lt;code>journalctl&lt;/code> of the previous boot also suddenly ends without a shutdown sequence:&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">$ journalctl -b -1 &lt;span class="p">|&lt;/span> tail -n &lt;span class="m">2&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Apr &lt;span class="m">04&lt;/span> 17:16:11 compute-0 systemd&lt;span class="o">[&lt;/span>1&lt;span class="o">]&lt;/span>: Finished Cleanup of Temporary Directories.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Apr &lt;span class="m">04&lt;/span> 17:16:11 compute-0 systemd&lt;span class="o">[&lt;/span>1&lt;span class="o">]&lt;/span>: run-credentials-systemd&lt;span class="se">\x&lt;/span>2dtmpfiles&lt;span class="se">\x&lt;/span>2dclean.service.mount: Deactivated successfully.
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>Note: The shutdown was initiated at &lt;code>17:17:45&lt;/code> when considering the different timezone configurations.&lt;/p>
+&lt;p>Nevertheless, we can have an indicator, that the previous boot had an unclean shutdown by seeing if there was&lt;/p>
+&lt;ul>
+&lt;li>A recovery started during latest boot&lt;/li>
+&lt;li>A filesystem check initiated during latest boot.&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;span class="lnt">3
+&lt;/span>&lt;span class="lnt">4
+&lt;/span>&lt;span class="lnt">5
+&lt;/span>&lt;span class="lnt">6
+&lt;/span>&lt;span class="lnt">7
+&lt;/span>&lt;span class="lnt">8
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">$ journalctl -b &lt;span class="m">0&lt;/span> &lt;span class="p">|&lt;/span> grep -iE &lt;span class="s1">&amp;#39;recover|fsck&amp;#39;&lt;/span>
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Apr &lt;span class="m">04&lt;/span> 17:17:58 localhost systemd-fsck&lt;span class="o">[&lt;/span>651&lt;span class="o">]&lt;/span>: /usr/sbin/fsck.xfs: XFS file system.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Apr &lt;span class="m">04&lt;/span> 17:17:58 localhost kernel: XFS &lt;span class="o">(&lt;/span>vda4&lt;span class="o">)&lt;/span>: Starting recovery &lt;span class="o">(&lt;/span>logdev: internal&lt;span class="o">)&lt;/span> &amp;lt;&lt;span class="o">=====&lt;/span> HERE
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Apr &lt;span class="m">04&lt;/span> 17:17:58 localhost kernel: XFS &lt;span class="o">(&lt;/span>vda4&lt;span class="o">)&lt;/span>: Ending recovery &lt;span class="o">(&lt;/span>logdev: internal&lt;span class="o">)&lt;/span> &amp;lt;&lt;span class="o">=====&lt;/span> HERE
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Apr &lt;span class="m">04&lt;/span> 17:17:59 compute-0 systemd&lt;span class="o">[&lt;/span>1&lt;span class="o">]&lt;/span>: Created slice Slice /system/systemd-fsck.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Apr &lt;span class="m">04&lt;/span> 17:17:59 compute-0 systemd&lt;span class="o">[&lt;/span>1&lt;span class="o">]&lt;/span>: systemd-fsck-root.service: Deactivated successfully.
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Apr &lt;span class="m">04&lt;/span> 17:18:00 compute-0 systemd-fsck&lt;span class="o">[&lt;/span>819&lt;span class="o">]&lt;/span>: boot: recovering journal &amp;lt;&lt;span class="o">=====&lt;/span> HERE
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">Apr &lt;span class="m">04&lt;/span> 17:18:00 compute-0 systemd-fsck&lt;span class="o">[&lt;/span>819&lt;span class="o">]&lt;/span>: boot: clean, 365/98304 files, 150426/393216 blocks
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>We see that the system did not go through a normal shutdown sequence due to the presence of &lt;code>XFS&lt;/code> recovery and &lt;code>fsck&lt;/code> journal recovery which confirms that filesystems were not cleanly unmounted. See the &lt;code>unclean unmounts&lt;/code> section in the &lt;a class="link" href="https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/managing_file_systems/checking-and-repairing-a-file-system__managing-file-systems#error-handling-mechanisms-in-xfs_checking-and-repairing-a-file-system" target="_blank" rel="noopener"
+>RHEL 9 docs for XFS&lt;/a>.&lt;/p>
+&lt;h2 id="case-6-a-kernel-panic-occured">Case 6: A kernel panic occured
+&lt;/h2>&lt;p>A kernel panic is a safety measure taken by the kernel of an operating system when an internal fatal error is detected, such as hardware failures and memory corruption. First we need to clarify, if a system would reboot in such a case. The responsible setting is &lt;code>kernel.panic&lt;/code>, where &lt;code>0&lt;/code> means that the system is not rebooted. Any other value indicates the number of seconds which are waited before the reboot is triggered, see further &lt;a class="link" href="https://docs.kernel.org/admin-guide/sysctl/kernel.html#panic" target="_blank" rel="noopener"
+>kernel docs&lt;/a>.&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">$ sysctl kernel.panic
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">kernel.panic &lt;span class="o">=&lt;/span> &lt;span class="m">10&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>If a kernel panic would have happened, we would usually find a corresponding file in &lt;code>/sys/fs/pstore/&lt;/code>&lt;/p>
+&lt;div class="highlight">&lt;div class="chroma">
+&lt;table class="lntable">&lt;tr>&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code>&lt;span class="lnt">1
+&lt;/span>&lt;span class="lnt">2
+&lt;/span>&lt;/code>&lt;/pre>&lt;/td>
+&lt;td class="lntd">
+&lt;pre tabindex="0" class="chroma">&lt;code class="language-sh" data-lang="sh">&lt;span class="line">&lt;span class="cl">$ ls /sys/fs/pstore/
+&lt;/span>&lt;/span>&lt;span class="line">&lt;span class="cl">sh-5.1#
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/td>&lt;/tr>&lt;/table>
+&lt;/div>
+&lt;/div>&lt;p>As the setup here is a bit more complicated for OpenShift, I will leave it without an example. For further readings, please follow the &lt;a class="link" href="https://docs.kernel.org/admin-guide/pstore-blk.html" target="_blank" rel="noopener"
+>kernel docs&lt;/a>.&lt;/p>
+&lt;h2 id="conclusion">Conclusion
+&lt;/h2>&lt;p>Linux offers many powerful utilities to understand what has happened on your system. This includes user initiated actions, hypervisor / cloud provider activity and even hardware failures. If you have other indicators which you are usually verifying, please let me know.&lt;/p></description></item></channel></rss>
