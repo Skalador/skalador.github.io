@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Gaming on Kevin Niederwanger</title><link>https://www.niederwanger.dev/tags/gaming/</link><description>Recent content in Gaming on Kevin Niederwanger</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Fri, 31 Jan 2025 00:00:00 +0000</lastBuildDate><atom:link href="https://www.niederwanger.dev/tags/gaming/index.xml" rel="self" type="application/rss+xml"/><item><title>Gaming on Linux with a decade old hardware</title><link>https://www.niederwanger.dev/p/gaming-on-linux-with-a-decade-old-hardware/</link><pubDate>Fri, 31 Jan 2025 00:00:00 +0000</pubDate><guid>https://www.niederwanger.dev/p/gaming-on-linux-with-a-decade-old-hardware/</guid><description>&lt;img src="https://www.niederwanger.dev/p/gaming-on-linux-with-a-decade-old-hardware/gaming.jpg" alt="Featured image of post Gaming on Linux with a decade old hardware" /&gt;&lt;h2 id="a-retrospective"&gt;A retrospective
+&lt;/h2&gt;&lt;p&gt;Ten years ago I have used my exact same workstation hardware to try my first linux desktop experience.
+My hardware is:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Intel Xeon CPU E3-1231 v3&lt;/li&gt;
+&lt;li&gt;Nvidia GTX 970
+&lt;ul&gt;
+&lt;li&gt;broke twice, but one time within warranty&lt;/li&gt;
+&lt;li&gt;replaced it with a GTX 1050Ti&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;16 GB DDR3 RAM&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;As you can tell, that is not really a powerful hardware nowadays anymore.&lt;/p&gt;
+&lt;p&gt;Back then I was using Ubuntu in dual boot with Windows 7. As I was not sure, if Linux would actually work as I hoped it to work, I didn&amp;rsquo;t dare to completely wipe my Windows. Fortunately, I haven&amp;rsquo;t done it as my Linux desktop experience was quite tedious. The biggest pain points I was facing were:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;I was not that familiar with Linux itself (at least compared to now)&lt;/li&gt;
+&lt;li&gt;Installing the correct hardware drivers was a nightmare&lt;/li&gt;
+&lt;li&gt;Most games didn&amp;rsquo;t offer native Linux support thus you had to rely heavily on &lt;a class="link" href="https://www.winehq.org/" target="_blank" rel="noopener"
+&gt;wine&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Almost no native gaming clients&lt;/li&gt;
+&lt;li&gt;I could not get some games working on linux&lt;/li&gt;
+&lt;li&gt;Looking at forums you occasionally found threads about people complaining to be banned, because they were playing on a non supported operating system&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id="why-now"&gt;Why now?
+&lt;/h2&gt;&lt;p&gt;As time has passed, I was evaluating if I want to migrate my Windows 10 to Windows 11. After checking the &lt;a class="link" href="https://www.microsoft.com/en-us/windows/windows-11-specifications" target="_blank" rel="noopener"
+&gt;system requirements for Windows 11&lt;/a&gt;, I found out that my PC was lacking on the following parts:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Convert Master Boot Record (MBR) to GUID Partition Table (GPT) to enable UEFI boot&lt;/li&gt;
+&lt;li&gt;No Trusted Platform Module (TPM)&lt;/li&gt;
+&lt;li&gt;Unsupported processor&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;While converting the MBR to GPT was a software issue and can be &lt;a class="link" href="https://www.windowscentral.com/how-convert-mbr-disk-gpt-move-bios-uefi-windows-10" target="_blank" rel="noopener"
+&gt;solved with this guide&lt;/a&gt;, the remaining items are hardware issues. There might be the possibility to work around this, but I didn&amp;rsquo;t like the direction Windows was aiming for anyway. Consequently, I have decided to give Linux another chance.&lt;/p&gt;
+&lt;h2 id="the-linux-experience"&gt;The Linux Experience
+&lt;/h2&gt;&lt;h3 id="which-distro"&gt;Which Distro?
+&lt;/h3&gt;&lt;p&gt;One of the first questions which come up, when you think about Linux is, which distribution to use? Given that I work for &lt;a class="link" href="https://www.redhat.com/en" target="_blank" rel="noopener"
+&gt;Red Hat&lt;/a&gt;, I have decided to use &lt;a class="link" href="https://fedoraproject.org/" target="_blank" rel="noopener"
+&gt;Fedora Workstation&lt;/a&gt;. This is mostly due to the &lt;a class="link" href="https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux" target="_blank" rel="noopener"
+&gt;Red Hat Enterprise Linux&lt;/a&gt; like behavior.&lt;/p&gt;
+&lt;h3 id="usability"&gt;Usability
+&lt;/h3&gt;&lt;p&gt;My impression is, that the usability has largely improved in the desktop space. The graphical user interface (GUI) looks very modern. You have the possibility to use multiple screens (as with MacOS). You can use the Software Center to obtain a ton of software including third parties, like &lt;code&gt;rpmfusion&lt;/code&gt; and &lt;code&gt;flatpaks&lt;/code&gt;. Most of the things can be configured via GUI, if you desire to do so.&lt;/p&gt;
+&lt;h3 id="are-all-problems-solved-now"&gt;Are all problems solved now?
+&lt;/h3&gt;&lt;p&gt;Let me elaborate on the problems mentioned earlier.&lt;/p&gt;
+&lt;h4 id="drivers"&gt;Drivers
+&lt;/h4&gt;&lt;p&gt;Per default Fedora was shipped with the &lt;a class="link" href="https://nouveau.freedesktop.org/" target="_blank" rel="noopener"
+&gt;NVIDIA nouveau&lt;/a&gt; drivers. Those drivers worked well for me on native Linux games. However, they performed very poorly on games which were relying on Wine. Yet again I had to install the GPU drivers from NVIDIA. To my surprise this was a very easy task. The software center had automatically detected which third party driver my system would need and I could install them very comfortably via the GUI.
+&lt;img src="https://www.niederwanger.dev/p/gaming-on-linux-with-a-decade-old-hardware/hardware_drivers.png"
+width="1322"
+height="922"
+srcset="https://www.niederwanger.dev/p/gaming-on-linux-with-a-decade-old-hardware/hardware_drivers_hu_d525435a9961c9ac.png 480w, https://www.niederwanger.dev/p/gaming-on-linux-with-a-decade-old-hardware/hardware_drivers_hu_c8adefa763e102b6.png 1024w"
+loading="lazy"
+class="gallery-image"
+data-flex-grow="143"
+data-flex-basis="344px"
+&gt;&lt;/p&gt;
+&lt;h4 id="gaming-clients"&gt;Gaming clients
+&lt;/h4&gt;&lt;p&gt;Unfortunately some gaming clients like the &lt;a class="link" href="https://www.blizzard.com/en-us/" target="_blank" rel="noopener"
+&gt;Blizzard Battle.net&lt;/a&gt; or &lt;a class="link" href="https://www.gog.com/wishlist/galaxy/release_the_gog_galaxy_client_for_linux" target="_blank" rel="noopener"
+&gt;GOG Galaxy&lt;/a&gt; do not offer native Linux support. Consequently you will need to take a look at other solutions.
+Currently there are differnet gaming clients available. The most common ones, besides &lt;a class="link" href="https://steamcommunity.com/" target="_blank" rel="noopener"
+&gt;Steam&lt;/a&gt;, are &lt;a class="link" href="https://heroicgameslauncher.com/" target="_blank" rel="noopener"
+&gt;Heroic Games Launcher&lt;/a&gt; and &lt;a class="link" href="https://lutris.net/" target="_blank" rel="noopener"
+&gt;Lutris&lt;/a&gt;. Both of those clients have their pros and cons. Lutris allows you to connect to the Battle.net
+&lt;img src="https://www.niederwanger.dev/p/gaming-on-linux-with-a-decade-old-hardware/lutris_battle_net.png"
+width="1920"
+height="1048"
+srcset="https://www.niederwanger.dev/p/gaming-on-linux-with-a-decade-old-hardware/lutris_battle_net_hu_20d8bd2e02106ecd.png 480w, https://www.niederwanger.dev/p/gaming-on-linux-with-a-decade-old-hardware/lutris_battle_net_hu_ba0bf1138958ca53.png 1024w"
+loading="lazy"
+class="gallery-image"
+data-flex-grow="183"
+data-flex-basis="439px"
+&gt; but does not offer cloud save files for the GOG Galaxy. While the Heroic Games Launcher does support the cloud saves, you cannot use it for the Blizzard games. Consequently, there is no one size fits all solution.&lt;/p&gt;
+&lt;h4 id="cloud-saves"&gt;Cloud saves
+&lt;/h4&gt;&lt;p&gt;An additional problem arises, when we talk about cloud saves. While, I cannot tell if this issue is persisnt across all gaming clients, but I can provide the following example: &lt;a class="link" href="https://www.gog.com/en/game/faster_than_light" target="_blank" rel="noopener"
+&gt;FTL: Advanced Edition&lt;/a&gt; is a strategy game which I had bought via GOG Galaxy (Note: I could have also bought it via Steam). To have my cloud save files, I would be required to use Heroic Games Launcher instead of Lutris. On the Heroic Games Launcher I have two options:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Install the Linux native version of the game (preferred)&lt;/li&gt;
+&lt;li&gt;Install the Windows version of the game and use Wine.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;After trying option 1, I rather quickly found out that I do not have access to my cloud save files as they are tied to my previous operating system installation. After wiping the linux native installation, I had installed the Windows version. Then I had access to my save files. Funnily enough, the save files are just text files which you can copy around and thus use them even with the Linux version. Nevertheless, to get the access to the cloud save from the previous Windows installation, you will have to download the Windows version. Especially as the GOG Galaxy does not offer a download of the cloud saves &lt;a class="link" href="https://www.gog.com/account/cloud-saves" target="_blank" rel="noopener"
+&gt;neither via the website&lt;/a&gt; nor &lt;a class="link" href="https://docs.gog.com/gc-cloud-saves/" target="_blank" rel="noopener"
+&gt;via an API&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id="performance"&gt;Performance
+&lt;/h2&gt;&lt;p&gt;Before I can elaborate on the performance, I need to clarify, that there are no metrics being compared between the operating systems. I will just refer to the same games on equal graphic settings and see if those feel fluid (like before). The games I will be referring to are:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Heroes of the Storm&lt;/li&gt;
+&lt;li&gt;Frostpunk&lt;/li&gt;
+&lt;li&gt;Elden Ring&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="heroes-of-the-storm"&gt;Heroes of the Storm
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;Client: Lutris&lt;/li&gt;
+&lt;li&gt;Game acquired via: GOG Galaxy&lt;/li&gt;
+&lt;li&gt;Native platform(s): Windows&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Lutris allows you to install the &lt;a class="link" href="https://download.battle.net/de-de/desktop" target="_blank" rel="noopener"
+&gt;Battle.net Desktop Client&lt;/a&gt; and then the game via the client as usual. This game works very well on Linux with equal graphic settings, i.e. &lt;code&gt;High&lt;/code&gt;. When playing around with ALT+TAB and the Super/Windows key I found out that it is better to run this game with the &lt;code&gt;Display Mode: Windowed Fullscreen&lt;/code&gt;. One thing which worked even better on Linux than Windows is, that I did not run into the &lt;a class="link" href="https://us.forums.blizzard.com/en/heroes/t/infinite-reconnecting-screen/26423" target="_blank" rel="noopener"
+&gt;Infinite Reconnecting screen&lt;/a&gt; which is some odd bug in the game which was never fixed.&lt;/p&gt;
+&lt;h3 id="frostpunk"&gt;Frostpunk
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;Client: Heroic Games Launcher&lt;/li&gt;
+&lt;li&gt;Game acquired via: GOG Galaxy&lt;/li&gt;
+&lt;li&gt;Native platform(s): Windows&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;There was no issue with playing the game. It runs fluent and had no issues when tabbing in and out. The cloud saves caused some difficulties, but this seems to be game rather than platform specific.&lt;/p&gt;
+&lt;h3 id="elden-ring"&gt;Elden Ring
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;Client: Steam&lt;/li&gt;
+&lt;li&gt;Game acquired via: Steam&lt;/li&gt;
+&lt;li&gt;Native platform(s): Windows&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This masterpiece is surely the most resource intense game on the list. Nevertheless, Linux was still able to run it without any issue on &lt;code&gt;High&lt;/code&gt; graphic settings. Via Steam I could also easily connect my PS3 controller without any additional software and had access to all cloud saves.&lt;/p&gt;
+&lt;h2 id="which-games-are-problematic"&gt;Which games are problematic?
+&lt;/h2&gt;&lt;p&gt;Generally speaking games which use kernel-level anti-cheat technology might not run on linux due to the use of Wine or Proton. A list of games relying on kernel-level anti-cheat can be found &lt;a class="link" href="https://www.pcgamingwiki.com/wiki/List_of_games_with_anti-cheat_technology" target="_blank" rel="noopener"
+&gt;here&lt;/a&gt;. If you look at the list very carefully, you will see that Elden Ring also uses kernel-level anti-cheat. This was no issue for me, as I was not playing online.&lt;/p&gt;
+&lt;p&gt;I have a strong opinion that kernel-level anti-cheat gaming software should not be used, because the kernel is not a place for user software. Especially not gaming software. A human friendly one minute explanation can be found on &lt;a class="link" href="https://www.youtube.com/watch?v=V1HwhwXelZo" target="_blank" rel="noopener"
+&gt;Youtube from Pirate Software below&lt;/a&gt;:
+&lt;div class="video-wrapper"&gt;
+&lt;iframe loading="lazy"
+src="https://www.youtube.com/embed/V1HwhwXelZo"
+allowfullscreen
+title="YouTube Video"
+&gt;
+&lt;/iframe&gt;
+&lt;/div&gt;
+&lt;/p&gt;
+&lt;h2 id="conclusion"&gt;Conclusion
+&lt;/h2&gt;&lt;p&gt;The linux desktop has become way more user friendly than it was before. As you have seen, there might still be some minor issues, but it is not really blocking you from using it as a main operating system. My experience is very positive and I am more than happy that I had spent time on it.&lt;/p&gt;</description></item></channel></rss>
